@@ -1,8 +1,14 @@
-<!-- last_verified: 2026-07-27 -->
+<!-- last_verified: 2026-07-28 -->
 # Feature: File Browser
 
 ## Purpose
-List, preview, download, and delete files stored in Backblaze B2.
+List, preview, download, and delete **every** object in the bucket — whole-bucket
+forensics, unscoped.
+
+This deliberately overlaps [asset-library.md](asset-library.md), which is scoped to
+`assets/<product>/`. Two different jobs: "what is in my bucket?" vs. "what material
+does this product have?". Per AGENTS.md §3 this view must stay wired to the whole
+bucket and must never be removed or scoped.
 
 ## Used By
 - UI: `/files` page, file browser component
@@ -57,11 +63,11 @@ List, preview, download, and delete files stored in Backblaze B2.
 - Invalid file key (traversal attempt, empty key) → API returns 400
 - File key contains `/`, spaces, `#`, `?`, `%`, reserved route names, or suffixes like `/download` and `/preview` → web client sends the key as a query parameter before calling get/download/preview/delete routes
 - B2 unreachable → persistent error state with retry
-- Empty bucket → upload prompt with direct Upload action
+- Empty bucket → prompt with a direct **Ingest assets** action
 - Delete failure → API returns 500, toast error
 
 ## UX States
-- Empty: centered message with upload prompt and Upload action
+- Empty: centered message with an **Ingest assets** action
 - Loading: skeleton rows
 - Error: inline error state with Retry
 - Loaded: tree view with expand/collapse folders and focus/hover action menus

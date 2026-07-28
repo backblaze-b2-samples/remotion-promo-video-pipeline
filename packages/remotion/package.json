@@ -1,0 +1,22 @@
+{
+  "name": "@remotion-promo-video-pipeline/remotion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "studio": "remotion studio src/index.ts"
+  },
+  "dependencies": {
+    "@remotion-promo-video-pipeline/shared": "workspace:*",
+    "@remotion/bundler": "^4.0.500",
+    "@remotion/renderer": "^4.0.500",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "^4.0.500"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5"
+  }
+}

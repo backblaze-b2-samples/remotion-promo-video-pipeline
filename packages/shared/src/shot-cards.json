@@ -1,0 +1,158 @@
+{
+  "attribution": "Card ids, categories and recipe intent are derived from the video-shotcraft shot-card taxonomy (Apache-2.0). See docs/LICENSING.md.",
+  "upstream": "https://github.com/Vincentwei1021/video-shotcraft",
+  "upstream_card_count": 104,
+  "cards": [
+    {
+      "id": "spotlight-hero-card",
+      "title": "Spotlight Hero",
+      "category": "hero",
+      "energy": "high",
+      "default_duration_frames": 30,
+      "uses_capture": true,
+      "purpose": "Open on the product surface with a moving spotlight so the eye lands on the UI before any copy appears.",
+      "pitfalls": [
+        "A spotlight tighter than ~35% of the frame reads as a vignette bug, not a highlight.",
+        "Do not stack a headline over the spotlight centre — the two fight for the same pixels."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "paper-title-card",
+      "title": "Paper Title Card",
+      "category": "title",
+      "energy": "calm",
+      "default_duration_frames": 24,
+      "uses_capture": false,
+      "purpose": "State the promise on a flat paper-stock card: one headline, one sub, nothing else.",
+      "pitfalls": [
+        "More than ~7 words in the headline stops being readable at 9:16.",
+        "Keep it on screen for at least 0.7s or it reads as a flash frame."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "typewriter-moves",
+      "title": "Typewriter Moves",
+      "category": "text",
+      "energy": "medium",
+      "default_duration_frames": 36,
+      "uses_capture": false,
+      "purpose": "Type the value proposition in, character by character, so the viewer reads at the narrator's pace.",
+      "pitfalls": [
+        "Typing speed must finish before the shot ends, or the sentence is never seen whole.",
+        "A blinking caret on the last frame looks like a stall — settle it."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "deck-deal-flyin",
+      "title": "Deck Deal Fly-In",
+      "category": "layout",
+      "energy": "high",
+      "default_duration_frames": 30,
+      "uses_capture": false,
+      "purpose": "Deal three feature cards in like playing cards to show breadth without a wall of text.",
+      "pitfalls": [
+        "Stagger the deal; simultaneous arrival reads as a single blurry object.",
+        "Three cards is the ceiling at 9:16 — a fourth clips off-frame."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "row-embed",
+      "title": "Row Embed",
+      "category": "embed",
+      "energy": "medium",
+      "default_duration_frames": 30,
+      "uses_capture": true,
+      "purpose": "Embed the real captured UI in a device row so the claim is evidenced by the product itself.",
+      "pitfalls": [
+        "A 16:9 capture cropped to 9:16 loses the sidebar — respect the variant safe area.",
+        "Never scale a 1x capture up; ingest at device_scale_factor=2."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "crash-zoom-punch",
+      "title": "Crash Zoom Punch",
+      "category": "emphasis",
+      "energy": "high",
+      "default_duration_frames": 30,
+      "uses_capture": true,
+      "purpose": "Punch into one detail of the capture on the beat to mark the single most important moment.",
+      "pitfalls": [
+        "One crash zoom per video. Two reads as a glitch.",
+        "The punch frame must land exactly on a beat or the whole cut feels late."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "odometer-digit-roll",
+      "title": "Odometer Digit Roll",
+      "category": "data",
+      "energy": "medium",
+      "default_duration_frames": 30,
+      "uses_capture": false,
+      "purpose": "Roll a headline number up like an odometer so a metric feels earned rather than asserted.",
+      "pitfalls": [
+        "Roll to a real number; a fake metric is the fastest way to lose a technical audience.",
+        "Rolling more than 4 digits at 30fps turns into unreadable mush."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "beat-cut-moves",
+      "title": "Beat Cut Moves",
+      "category": "rhythm",
+      "energy": "high",
+      "default_duration_frames": 30,
+      "uses_capture": false,
+      "purpose": "Hard-cut between framings strictly on the beat grid to carry momentum through the middle of the video.",
+      "pitfalls": [
+        "Cuts off the beat grid feel like dropped frames — this card must be beat-snapped.",
+        "Four cuts inside one second is a seizure risk; keep sub-shots >= 6 frames."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "wipe-transitions",
+      "title": "Wipe Transitions",
+      "category": "transition",
+      "energy": "medium",
+      "default_duration_frames": 24,
+      "uses_capture": false,
+      "purpose": "Wipe from one colour field to the next to change subject without a jarring jump cut.",
+      "pitfalls": [
+        "A wipe slower than ~0.5s reads as a loading screen.",
+        "Wipe direction should match the reading direction of the copy it reveals."
+      ],
+      "implemented": true
+    },
+    {
+      "id": "ui-to-brand-morph",
+      "title": "UI to Brand Morph",
+      "category": "outro",
+      "energy": "calm",
+      "default_duration_frames": 36,
+      "uses_capture": true,
+      "purpose": "Morph the product surface into the brand lockup so the last frame is the thing you want remembered.",
+      "pitfalls": [
+        "Hold the final lockup for >= 0.5s after the morph settles, or the end card is unreadable.",
+        "On the muted loop variant the outro must still work with no audio cue."
+      ],
+      "implemented": true
+    }
+  ],
+  "sfx": [
+    { "id": "none", "label": "No SFX", "synthesized": false },
+    { "id": "riser", "label": "Riser", "synthesized": true },
+    { "id": "impact", "label": "Impact", "synthesized": true },
+    { "id": "tick", "label": "Tick", "synthesized": true }
+  ],
+  "accents": [
+    { "id": "ink-amber", "label": "Ink Amber" },
+    { "id": "neon-cyan", "label": "Neon Cyan" },
+    { "id": "mono-slate", "label": "Mono Slate" }
+  ]
+}

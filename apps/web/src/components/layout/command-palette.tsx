@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
+  Film,
+  Library,
+  LayoutTemplate,
   Upload,
   FolderOpen,
   Settings,
@@ -25,7 +28,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { getFiles } from "@/lib/api-client";
-import type { FileMetadata } from "@vibe-coding-starter-kit/shared";
+import type { FileMetadata } from "@remotion-promo-video-pipeline/shared";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -34,7 +37,11 @@ interface CommandPaletteProps {
 
 const routes = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Upload", href: "/upload", icon: Upload },
+  { label: "Promos", href: "/promos", icon: Film },
+  { label: "New promo", href: "/promos/new", icon: Film },
+  { label: "Asset Library", href: "/library", icon: Library },
+  { label: "Shot Cards", href: "/shot-cards", icon: LayoutTemplate },
+  { label: "Ingest", href: "/ingest", icon: Upload },
   { label: "Files", href: "/files", icon: FolderOpen },
   { label: "Settings", href: "/settings", icon: Settings },
   { label: "Design System", href: "/design", icon: Sparkles },

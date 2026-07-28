@@ -30,21 +30,28 @@ def _split_key(key: str) -> tuple[str, str]:
 
 def _public_url(key: str) -> str | None:
     """Build a public URL for an object key, percent-encoding the path."""
-    if not settings.b2_public_url:
+    if not settings.b2_public_url_base:
         return None
-    return f"{settings.b2_public_url}/{quote(key, safe='/')}"
+    return f"{settings.b2_public_url_base}/{quote(key, safe='/')}"
 
 
 @functools.lru_cache(maxsize=1)
 def get_s3_client():
+    """The one boto3 S3 client for the whole app.
+
+    `region_name` and `endpoint_url` both come from `B2_REGION` (see
+    `settings.s3_endpoint`) so no region literal is baked into source, and
+    `user_agent_extra` identifies this sample in B2's request logs.
+    """
     return boto3.client(
         "s3",
-        endpoint_url=settings.b2_endpoint,
-        aws_access_key_id=settings.b2_key_id,
+        endpoint_url=settings.s3_endpoint,
+        region_name=settings.b2_region or None,
+        aws_access_key_id=settings.b2_application_key_id,
         aws_secret_access_key=settings.b2_application_key,
         config=Config(
             signature_version="s3v4",
-            user_agent_extra="b2ai-oss-start",
+            user_agent_extra="b2ai-remotion-promo-video-pipeline",
         ),
     )
 
@@ -254,46 +261,3 @@ def delete_file(key: str) -> None:
     except ClientError as e:
         raise RuntimeError(f"B2 delete failed for '{key}': {e}") from e
     _invalidate_list_cache()  # deleted object must disappear from listings/stats
-
-
-def get_presigned_url(
-    key: str, filename: str | None = None, expires_in: int = 600
-) -> str:
-    """Generate a presigned download URL. Raises RuntimeError on failure."""
-    client = get_s3_client()
-    params: dict = {"Bucket": settings.b2_bucket_name, "Key": key}
-    if filename:
-        # RFC 5987 encoding for non-ASCII filenames
-        encoded = quote(filename, safe="")
-        params["ResponseContentDisposition"] = (
-            f"attachment; filename=\"{encoded}\"; filename*=UTF-8''{encoded}"
-        )
-    else:
-        params["ResponseContentDisposition"] = "attachment"
-    try:
-        return client.generate_presigned_url(
-            "get_object",
-            Params=params,
-            ExpiresIn=expires_in,
-        )
-    except ClientError as e:
-        raise RuntimeError(f"B2 presign failed for '{key}': {e}") from e
-
-
-def get_upload_stats() -> dict:
-    """Aggregate stats across every object in the bucket.
-
-    Raises RuntimeError on S3 failure.
-    """
-    contents = _list_all_objects()
-    total_size = sum(obj["Size"] for obj in contents)
-    today = datetime.now(UTC).date()
-    uploads_today = sum(
-        1 for obj in contents if obj["LastModified"].date() == today
-    )
-    return {
-        "total_files": len(contents),
-        "total_size_bytes": total_size,
-        "total_size_human": humanize_bytes(total_size),
-        "uploads_today": uploads_today,
-    }

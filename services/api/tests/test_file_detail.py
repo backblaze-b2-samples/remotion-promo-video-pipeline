@@ -66,9 +66,8 @@ async def test_detail_returns_checksums_for_text_file(client, monkeypatch):
     # The stored object's real upload time (head_object LastModified) is
     # threaded through the recompute — not the recompute wall-clock time.
     assert body["uploaded_at"].startswith("2026-01-02T03:04:05")
-    # Non-image / non-PDF: media/image/pdf fields stay null.
+    # Non-image: image/media fields stay null.
     assert body["image_width"] is None
-    assert body["pdf_pages"] is None
     assert body["duration_seconds"] is None
 
 

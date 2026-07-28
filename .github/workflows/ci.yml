@@ -1,4 +1,4 @@
-name: CI
+name: verify
 
 # Runs the canonical non-live verification gate documented in AGENTS.md and
 # docs/dev-workflows.md. `pnpm verify` = `pnpm check:agent-docs &&

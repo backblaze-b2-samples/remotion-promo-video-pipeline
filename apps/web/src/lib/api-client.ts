@@ -1,10 +1,23 @@
 import type {
+  AssetLibrary,
+  CaptureInput,
+  CaptureResponse,
+  CreatePromoInput,
   DailyUploadCount,
   FileMetadata,
   FileMetadataDetail,
   FileUploadResponse,
+  PassVolumePoint,
+  PipelineStats,
+  PromoDefaults,
+  PromoDetail,
+  PromoSummary,
+  RenderProgress,
+  ShotCardLibrary,
+  Storyboard,
+  UpdatePromoInput,
   UploadStats,
-} from "@vibe-coding-starter-kit/shared";
+} from "@remotion-promo-video-pipeline/shared";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -190,6 +203,19 @@ export function uploadFile(
   file: File,
   onProgress?: (percent: number) => void
 ): Promise<FileUploadResponse> {
+  return uploadFileTo("/upload", file, onProgress);
+}
+
+/**
+ * XHR (not fetch) because only XHR exposes upload progress events, which the
+ * dropzone's per-file progress bar needs. `path` carries the optional
+ * `?product=&kind=` that files an asset under `assets/<product>/...`.
+ */
+export function uploadFileTo(
+  path: string,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<FileUploadResponse> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
@@ -219,7 +245,105 @@ export function uploadFile(
       reject(new ApiError("Upload aborted", 0)),
     );
 
-    xhr.open("POST", `${API_BASE}/upload`);
+    xhr.open("POST", `${API_BASE}${path}`);
     xhr.send(formData);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Promo render pipeline
+//
+// One function per endpoint, all going through the same `apiFetch` so error
+// mapping, CORS diagnostics and retry behaviour are identical everywhere. These
+// are consumed only via the TanStack Query hooks in `lib/queries.ts` — never
+// called from a component directly (AGENTS.md §3).
+// ---------------------------------------------------------------------------
+
+async function apiSend<T>(path: string, method: string, body?: unknown): Promise<T> {
+  return apiFetch<T>(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+export async function getPromos() {
+  return apiFetch<PromoSummary[]>("/promos");
+}
+
+export async function getPromo(jobId: string) {
+  return apiFetch<PromoDetail>(`/promos/${encodeURIComponent(jobId)}`);
+}
+
+export async function getPromoStats() {
+  return apiFetch<PipelineStats>("/promos/stats");
+}
+
+export async function getPassVolume(limit = 8) {
+  return apiFetch<PassVolumePoint[]>(`/promos/volume?limit=${limit}`);
+}
+
+export async function getPromoDefaults() {
+  return apiFetch<PromoDefaults>("/promo-defaults");
+}
+
+export async function createPromo(spec: CreatePromoInput) {
+  return apiSend<Storyboard>("/promos", "POST", spec);
+}
+
+export async function updatePromo(jobId: string, patch: UpdatePromoInput) {
+  return apiSend<Storyboard>(`/promos/${encodeURIComponent(jobId)}`, "PATCH", patch);
+}
+
+export async function deletePromo(jobId: string) {
+  return apiSend<{ deleted: boolean; job_id: string; objects_removed: number }>(
+    `/promos/${encodeURIComponent(jobId)}`,
+    "DELETE",
+  );
+}
+
+export async function renderPromo(jobId: string) {
+  return apiSend<RenderProgress>(
+    `/promos/${encodeURIComponent(jobId)}/render`,
+    "POST",
+  );
+}
+
+export async function getRenderProgress(jobId: string) {
+  return apiFetch<RenderProgress>(`/promos/${encodeURIComponent(jobId)}/progress`);
+}
+
+export async function getShotCards() {
+  return apiFetch<ShotCardLibrary>("/shot-cards");
+}
+
+export async function getAssetLibrary(product: string) {
+  return apiFetch<AssetLibrary>(`/assets?product=${encodeURIComponent(product)}`);
+}
+
+export async function getProducts() {
+  return apiFetch<{ products: string[]; default: string }>("/products");
+}
+
+export async function createCaptures(input: CaptureInput) {
+  return apiSend<CaptureResponse>("/captures", "POST", input);
+}
+
+export async function createDemoAudio(product: string, bpm: number) {
+  return apiSend<{ product: string; bed_key: string; sfx: { id: string; key: string }[] }>(
+    "/assets/demo-audio",
+    "POST",
+    { product, bpm },
+  );
+}
+
+/** Upload an asset straight into `assets/<product>/<kind>/` on B2. */
+export function uploadAsset(
+  file: File,
+  product: string,
+  kind: "brand" | "audio" | "capture",
+  onProgress?: (percent: number) => void,
+): Promise<FileUploadResponse> {
+  const query = new URLSearchParams({ product, kind }).toString();
+  return uploadFileTo(`/upload?${query}`, file, onProgress);
 }

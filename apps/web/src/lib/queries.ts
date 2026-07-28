@@ -1,20 +1,47 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import {
   ApiError,
+  createCaptures,
+  createDemoAudio,
+  createPromo,
   deleteFile,
+  deletePromo,
+  getAssetLibrary,
   getFileDetail,
   getFiles,
   getFileStats,
   getHealth,
+  getPassVolume,
   getPreviewUrl,
+  getProducts,
+  getPromo,
+  getPromoDefaults,
+  getPromos,
+  getPromoStats,
+  getRenderProgress,
+  getShotCards,
   getUploadActivity,
+  renderPromo,
+  updatePromo,
 } from "@/lib/api-client";
 import type {
+  AssetLibrary,
+  CaptureInput,
+  CreatePromoInput,
   FileMetadata,
   FileMetadataDetail,
-} from "@vibe-coding-starter-kit/shared";
+  PassVolumePoint,
+  PipelineStats,
+  PromoDefaults,
+  PromoDetail,
+  PromoSummary,
+  RenderProgress,
+  ShotCardLibrary,
+  UpdatePromoInput,
+} from "@remotion-promo-video-pipeline/shared";
 
 // Single source of truth for query keys. Keep these tightly scoped so that
 // invalidating "files" doesn't blow away unrelated caches, and so an IDE
@@ -100,6 +127,188 @@ export function useDeleteFile() {
     // After delete, blow away every cached file list + stats. Cheap and
     // correct — the dashboard re-fetches lazily as components remount.
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.all });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Promo render pipeline hooks
+//
+// Query keys stay narrow so invalidating promos doesn't blow away the bucket
+// listing (or vice versa). `usePromoProgress` is the only polling query: it
+// polls while a pass is in flight and stops the moment it isn't.
+// ---------------------------------------------------------------------------
+
+export const pk = {
+  all: ["promo"] as const,
+  list: () => [...pk.all, "list"] as const,
+  detail: (jobId: string) => [...pk.all, "detail", jobId] as const,
+  stats: () => [...pk.all, "stats"] as const,
+  volume: (limit: number) => [...pk.all, "volume", limit] as const,
+  defaults: () => [...pk.all, "defaults"] as const,
+  progress: (jobId: string) => [...pk.all, "progress", jobId] as const,
+  shotCards: () => [...pk.all, "shot-cards"] as const,
+  assets: (product: string) => [...pk.all, "assets", product] as const,
+  products: () => [...pk.all, "products"] as const,
+};
+
+const PROGRESS_POLL_MS = 1500;
+
+export function usePromos() {
+  return useQuery<PromoSummary[], ApiError>({
+    queryKey: pk.list(),
+    queryFn: getPromos,
+  });
+}
+
+export function usePromo(jobId: string) {
+  return useQuery<PromoDetail, ApiError>({
+    queryKey: pk.detail(jobId),
+    queryFn: () => getPromo(jobId),
+    enabled: !!jobId,
+  });
+}
+
+export function usePipelineStats() {
+  return useQuery<PipelineStats, ApiError>({
+    queryKey: pk.stats(),
+    queryFn: getPromoStats,
+  });
+}
+
+export function usePassVolume(limit = 8) {
+  return useQuery<PassVolumePoint[], ApiError>({
+    queryKey: pk.volume(limit),
+    queryFn: () => getPassVolume(limit),
+  });
+}
+
+// Form hints (safe defaults, selector options). They only change when the
+// server configuration changes, so they are effectively static per session.
+export function usePromoDefaults() {
+  return useQuery<PromoDefaults, ApiError>({
+    queryKey: pk.defaults(),
+    queryFn: getPromoDefaults,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useShotCards() {
+  return useQuery<ShotCardLibrary, ApiError>({
+    queryKey: pk.shotCards(),
+    queryFn: getShotCards,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useAssetLibrary(product: string) {
+  return useQuery<AssetLibrary, ApiError>({
+    queryKey: pk.assets(product),
+    queryFn: () => getAssetLibrary(product),
+    enabled: !!product,
+  });
+}
+
+export function useProducts() {
+  return useQuery({
+    queryKey: pk.products(),
+    queryFn: getProducts,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Poll a promo's render progress. Polling stops as soon as the pass leaves the
+ * "rendering" state, and every completed pass invalidates the promo caches so
+ * the new variants and the amplification stats appear without a manual refresh.
+ */
+export function usePromoProgress(jobId: string, enabled = true) {
+  const qc = useQueryClient();
+  const lastStatus = useRef<string | null>(null);
+
+  const query = useQuery<RenderProgress, ApiError>({
+    queryKey: pk.progress(jobId),
+    queryFn: () => getRenderProgress(jobId),
+    enabled: enabled && !!jobId,
+    refetchInterval: (q) =>
+      q.state.data?.status === "rendering" ? PROGRESS_POLL_MS : false,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    const status = query.data?.status ?? null;
+    if (status && lastStatus.current === "rendering" && status !== "rendering") {
+      qc.invalidateQueries({ queryKey: pk.all });
+      qc.invalidateQueries({ queryKey: qk.all });
+    }
+    lastStatus.current = status;
+  }, [query.data?.status, qc]);
+
+  return query;
+}
+
+export function useCreatePromo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreatePromoInput) => createPromo(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: pk.all });
+      qc.invalidateQueries({ queryKey: qk.all });
+    },
+  });
+}
+
+export function useUpdatePromo(jobId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: UpdatePromoInput) => updatePromo(jobId, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: pk.all });
+    },
+  });
+}
+
+export function useDeletePromo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => deletePromo(jobId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: pk.all });
+      qc.invalidateQueries({ queryKey: qk.all });
+    },
+  });
+}
+
+export function useRenderPromo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => renderPromo(jobId),
+    onSuccess: (progress) => {
+      qc.setQueryData(pk.progress(progress.job_id), progress);
+      qc.invalidateQueries({ queryKey: pk.list() });
+    },
+  });
+}
+
+export function useCreateCaptures() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CaptureInput) => createCaptures(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: pk.all });
+      qc.invalidateQueries({ queryKey: qk.all });
+    },
+  });
+}
+
+export function useCreateDemoAudio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ product, bpm }: { product: string; bpm: number }) =>
+      createDemoAudio(product, bpm),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: pk.all });
       qc.invalidateQueries({ queryKey: qk.all });
     },
   });

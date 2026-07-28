@@ -1,7 +1,13 @@
 packages:
   - "apps/*"
   - "packages/*"
+# Every dependency allowed to run a build script must be listed explicitly.
+# esbuild arrives via @remotion/bundler; if it is missing here, pnpm 11 rewrites
+# this file with the literal placeholder `esbuild: set this to true or false`,
+# which then breaks `pnpm install --frozen-lockfile`. Add
+# `@remotion/compositor-*` the same way if pnpm ever asks for them.
 allowBuilds:
+  esbuild: true
   msw: true
   sharp: true
   unrs-resolver: true

@@ -5,16 +5,44 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.runtime.metrics import record_upload
-from app.service.upload import UploadError, process_upload
+from app.service.upload import DEFAULT_FOLDER, UploadError, process_upload
 from app.types import FileUploadResponse
+from app.types.keys import asset_prefix
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# `kind` -> subfolder inside assets/<product>/. Anything else (or no product)
+# falls back to the generic uploads/ root, so the plain dropzone still works.
+ASSET_FOLDERS = {
+    "brand": "brand/",
+    "audio": "audio/bgm/",
+    "capture": "captures/manual/",
+}
+
+
+def resolve_folder(product: str, kind: str) -> str:
+    """Where an ingested file lands. `/ingest` files assets by product."""
+    subfolder = ASSET_FOLDERS.get(kind)
+    if product and subfolder:
+        return f"{asset_prefix(product)}{subfolder}"
+    return DEFAULT_FOLDER
+
 
 @router.post("/upload", response_model=FileUploadResponse)
-async def upload(request: Request, file: UploadFile):
+async def upload(
+    request: Request,
+    file: UploadFile,
+    product: str = "",
+    kind: str = "",
+):
+    """Upload one file.
+
+    With `?product=<slug>&kind=brand|audio|capture` the object is filed into
+    `assets/<product>/...` so it shows up in the scoped `/library` view; without
+    them it lands in `uploads/` like the starter kit's plain dropzone.
+    """
     content_type = file.content_type or "application/octet-stream"
     # A malformed Content-Length shouldn't 500 the request; the streaming loop
     # below enforces the real size limit regardless of the header.
@@ -46,6 +74,7 @@ async def upload(request: Request, file: UploadFile):
             filename=file.filename or "",
             content_type=content_type,
             content_length=content_length,
+            folder=resolve_folder(product, kind),
         )
     except UploadError as e:
         logger.warning("Upload rejected: %s", e.detail)

@@ -1,38 +1,118 @@
-<!-- last_verified: 2026-03-10 -->
+<!-- last_verified: 2026-07-28 -->
 # App Workflows
 
-User journeys inside the application.
+User journeys inside the application. The pipeline in one line:
 
-## Upload Files
+**ingest -> storyboard -> render -> encode -> variants -> manifest**
 
-- User navigates to `/upload`
-- Drops or selects files in the dropzone
-- Client validates file size (max 100MB) and type
-- Progress bar shows per-file upload status
-- On success: toast notification, green checkmark
-- On failure: red status icon with error message
-- User can clear completed uploads
-- See: [File Upload](features/file-upload.md)
+## Ingest assets
 
-## Browse and Manage Files
+- User navigates to `/ingest`
+- **Capture from a URL**: enters a product slug and a page URL (safe default
+  `http://localhost:3000`, this app's own UI), ticks viewports (desktop / tablet /
+  mobile), presses **Capture now**
+- Playwright Chromium screenshots each viewport at `device_scale_factor=2`; each
+  PNG is written to `assets/<product>/captures/<viewport>/product@2x.png`
+- With no Chromium installed the response reports `engine: "placeholder"` and an
+  inline alert explains `pnpm run setup:capture` — the pipeline still works
+- **Upload an asset**: picks a kind (brand file / audio bed / manual capture) and
+  drops files; each is filed under `assets/<product>/<kind>/` rather than a generic
+  `uploads/` folder, so it appears in the scoped Library
+- See: [Asset Ingest](features/asset-ingest.md)
 
-- User navigates to `/files`
-- Page loads file list from API (sorted most recent first)
-- Files displayed in tree view with folders and type-specific icons
-- Top-level folders auto-expand on load
-- Hover a file row to see action buttons (preview / download / delete)
-- **Preview**: opens dialog with image/PDF preview + metadata panel
-- **Download**: fetches presigned URL, browser downloads file
-- **Delete**: removes file from B2, row removed from tree, toast confirms
-- Empty bucket shows "No files found" with upload prompt
-- See: [File Browser](features/file-browser.md)
+## Author a storyboard
 
-## View Dashboard
+- User navigates to `/promos` → **New promo**
+- Free text only where it genuinely is: product slug, video title, capture URL.
+  Everything finite is a selector: preset, BPM, resolution, variants (checkboxes),
+  viewports (checkboxes), accent (radio group)
+- Safe defaults appear as placeholders and field descriptions — there is **no
+  autofill button**
+- The variants field states how many PNGs the next pass will write, before anything
+  is rendered
+- On submit: captures run inline, the preset expands into shots, boundaries snap to
+  the BPM beat grid, and `storyboards/<job-id>.json` is written at revision 1
+- User lands on `/promos/[id]`
+- See: [Storyboard Authoring](features/storyboard-authoring.md)
+
+## Render a pass
+
+- From the promo list row action or the detail page, user presses **Render**
+- The API returns 202 immediately with the pass number; the pass runs in a single
+  background worker
+- The detail page polls progress every 1.5s and shows the phase in plain language:
+  scanning B2 for frames already rendered → rendering frames in headless Chrome →
+  uploading frames to B2 → muxing frames + audio with ffmpeg → uploading the
+  variant + poster
+- Frames upload as they are produced, so `frames/<job-id>/pass-NN/<variant>/` fills
+  during the render
+- Pressing Render while a pass is in flight returns 409 and a toast says so
+- On completion the message reports the pass's frame count and amplification ratio,
+  and the page re-fetches: variants, poster, manifest, frame strip
+- If a render fails, the phase becomes **Failed** with the error text inline (the
+  full traceback is in the API log)
+- See: [Frame Rendering](features/frame-rendering.md),
+  [Encode & Variants](features/encode-and-variants.md)
+
+## Review a promo
+
+- User navigates to `/promos/[id]`
+- Each delivered variant plays inline in a `<video>` with its poster, served by a
+  presigned B2 URL (the API never proxies video bytes)
+- The storyboard panel shows a proportional timeline strip plus a per-shot list
+  with card id, beat-snapped frame range, SFX and whether a capture is attached
+- The manifest panel lists every pass newest-first: revision, timestamp, ratio and a
+  per-variant table of dimensions, frame counts, frame bytes and MP4 bytes
+- A frame strip shows six evenly spaced PNGs read back out of
+  `frames/<job-id>/pass-NN/master-16x9/` — visible proof the intermediates really
+  are on B2
+- See: [Delivery Manifest](features/delivery-manifest.md)
+
+## Revise and re-render
+
+- User opens **Edit storyboard** (`/promos/[id]/edit`), pre-filled from the stored
+  storyboard with no default hints
+- Swaps a shot card via a `Select`, retimes a shot, rewrites copy, picks an SFX,
+  reorders with the up/down actions, adds or removes a shot
+- The header states the running total: shots, frames, duration, and how many PNGs
+  the next pass will write across the selected variants
+- Save re-snaps every boundary to the beat grid and bumps `revision`
+- The next render becomes `pass-<NN+1>` under a fresh frame prefix — **that is the
+  write-amplification loop, made explicit**
+
+## Delete a promo
+
+- Row action or the detail page, then a confirmation `AlertDialog`
+- The dialog names the four prefixes that will be purged
+  (`storyboards/<id>.json`, `frames/<id>/`, `renders/<id>/`,
+  `manifests/<id>.json`) and states that shared `assets/` and other promos are
+  untouched
+- On confirm the API reports how many objects were removed
+
+## Browse assets
+
+- `/library` — scoped to `assets/<product>/`: capture thumbnails, inline `<audio>`
+  players for the bed and SFX, brand files, and a button that synthesizes the demo
+  audio if none exists yet. A product selector switches prefix.
+- `/files` — the untouched **whole-bucket** explorer: tree view, preview, download,
+  delete. Deliberately a different scope from Library.
+- See: [Asset Library](features/asset-library.md),
+  [File Browser](features/file-browser.md)
+
+## Read the dashboard
 
 - User navigates to `/` (home)
-- Three parallel API calls load: stats, recent files, upload activity
-- Stats cards show: total files, storage used, uploads today, total downloads
-- Upload chart shows last 7 days of upload activity as bar chart
-- Recent uploads table shows last 10 files with filename, size, type, date
-- Empty state: "No files uploaded yet" messages
-- See: [Dashboard](features/dashboard.md)
+- Four stat cards, amplification first: **write amplification** (intermediate bytes
+  per delivered byte), frames archived, delivered video, render passes
+- A bar chart compares frame bytes vs variant bytes for the last 8 passes
+- A recent-renders table links into each promo with its revision, pass count and ratio
+- The empty state points at **New promo** rather than showing zeros as if they were data
+- See: [Amplification Dashboard](features/dashboard.md)
+
+## Browse the shot-card library
+
+- `/shot-cards` lists the 10 implemented cards, filterable by category
+- Each card shows its id, category, energy, default duration, purpose and the
+  specific pitfalls that make it read wrong (too-tight spotlight, off-beat cut,
+  four-digit odometer mush)
+- A note links upstream to video-shotcraft for the full 104-card taxonomy

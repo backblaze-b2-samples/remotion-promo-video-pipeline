@@ -1,0 +1,185 @@
+{
+  "note": "Durations are in frames at 30 fps. Shot boundaries are re-snapped to the job's BPM beat grid at create time (services/api/app/types/beatgrid.py), which preserves the total duration.",
+  "presets": [
+    {
+      "id": "release-teaser",
+      "label": "Release teaser (6.0s, 180 frames)",
+      "description": "Six shots, fast enough to render inside a verification run. The demo default.",
+      "duration_frames": 180,
+      "shots": [
+        {
+          "card": "spotlight-hero-card",
+          "duration_frames": 30,
+          "headline": "{title}",
+          "sub": "{product}"
+        },
+        {
+          "card": "paper-title-card",
+          "duration_frames": 24,
+          "headline": "{title}",
+          "sub": "Built on Backblaze B2"
+        },
+        {
+          "card": "typewriter-moves",
+          "duration_frames": 36,
+          "headline": "Every frame archived",
+          "sub": "frames/, renders/, manifests/"
+        },
+        {
+          "card": "odometer-digit-roll",
+          "duration_frames": 30,
+          "headline": "1086",
+          "sub": "PNG frames per full pass"
+        },
+        {
+          "card": "crash-zoom-punch",
+          "duration_frames": 30,
+          "headline": "See it move",
+          "sub": "{product}"
+        },
+        {
+          "card": "ui-to-brand-morph",
+          "duration_frames": 30,
+          "headline": "{title}",
+          "sub": "backblaze.com"
+        }
+      ]
+    },
+    {
+      "id": "feature-tour",
+      "label": "Feature tour (18.0s, 540 frames)",
+      "description": "Ten shots at mid length — room for three feature cards and a beat-cut middle.",
+      "duration_frames": 540,
+      "shots": [
+        {
+          "card": "spotlight-hero-card",
+          "duration_frames": 60,
+          "headline": "{title}",
+          "sub": "{product}"
+        },
+        {
+          "card": "paper-title-card",
+          "duration_frames": 45,
+          "headline": "{title}",
+          "sub": "A tour in ten shots"
+        },
+        {
+          "card": "typewriter-moves",
+          "duration_frames": 60,
+          "headline": "Storyboard, render, archive",
+          "sub": "One composition, four variants"
+        },
+        {
+          "card": "deck-deal-flyin",
+          "duration_frames": 54,
+          "headline": "Three things it does",
+          "sub": "Capture / Render / Deliver"
+        },
+        {
+          "card": "row-embed",
+          "duration_frames": 54,
+          "headline": "The real UI",
+          "sub": "Captured at 2x"
+        },
+        {
+          "card": "beat-cut-moves",
+          "duration_frames": 54,
+          "headline": "On the grid",
+          "sub": "{product}"
+        },
+        {
+          "card": "odometer-digit-roll",
+          "duration_frames": 54,
+          "headline": "540",
+          "sub": "frames in this pass"
+        },
+        {
+          "card": "crash-zoom-punch",
+          "duration_frames": 54,
+          "headline": "Right here",
+          "sub": "The detail that sells it"
+        },
+        {
+          "card": "wipe-transitions",
+          "duration_frames": 45,
+          "headline": "And there is more",
+          "sub": "Re-render any revision"
+        },
+        {
+          "card": "ui-to-brand-morph",
+          "duration_frames": 60,
+          "headline": "{title}",
+          "sub": "backblaze.com"
+        }
+      ]
+    },
+    {
+      "id": "ink-press-full",
+      "label": "Ink press full (36.2s, 1086 frames)",
+      "description": "Mirrors the upstream Ink Press template. The write-amplification headliner: 1086 PNG frames per variant, per pass.",
+      "duration_frames": 1086,
+      "shots": [
+        {
+          "card": "spotlight-hero-card",
+          "duration_frames": 90,
+          "headline": "{title}",
+          "sub": "{product}"
+        },
+        {
+          "card": "paper-title-card",
+          "duration_frames": 96,
+          "headline": "{title}",
+          "sub": "Ink press, full length"
+        },
+        {
+          "card": "typewriter-moves",
+          "duration_frames": 120,
+          "headline": "1086 frames for a 40 MB file",
+          "sub": "That ratio is the whole story"
+        },
+        {
+          "card": "deck-deal-flyin",
+          "duration_frames": 114,
+          "headline": "Capture. Compose. Render.",
+          "sub": "Then do it again next revision"
+        },
+        {
+          "card": "row-embed",
+          "duration_frames": 114,
+          "headline": "Your product, not a mockup",
+          "sub": "Playwright at 2x"
+        },
+        {
+          "card": "beat-cut-moves",
+          "duration_frames": 114,
+          "headline": "Beat locked",
+          "sub": "Boundaries snap to the grid"
+        },
+        {
+          "card": "odometer-digit-roll",
+          "duration_frames": 108,
+          "headline": "1086",
+          "sub": "frames, every single pass"
+        },
+        {
+          "card": "crash-zoom-punch",
+          "duration_frames": 108,
+          "headline": "Zoom in",
+          "sub": "One punch, on the beat"
+        },
+        {
+          "card": "wipe-transitions",
+          "duration_frames": 102,
+          "headline": "Four platform cutdowns",
+          "sub": "Real re-renders, not crops"
+        },
+        {
+          "card": "ui-to-brand-morph",
+          "duration_frames": 120,
+          "headline": "{title}",
+          "sub": "backblaze.com"
+        }
+      ]
+    }
+  ]
+}

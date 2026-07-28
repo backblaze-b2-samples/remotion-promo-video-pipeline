@@ -38,22 +38,6 @@ def _extract_image_metadata(file_data: bytes) -> dict:
         return {}
 
 
-def _extract_pdf_metadata(file_data: bytes) -> dict:
-    try:
-        from PyPDF2 import PdfReader
-
-        reader = PdfReader(io.BytesIO(file_data))
-        info = reader.metadata
-        return {
-            "pdf_pages": len(reader.pages),
-            "pdf_author": info.author if info else None,
-            "pdf_title": info.title if info else None,
-        }
-    except Exception:
-        logger.warning("PDF metadata extraction failed", exc_info=True)
-        return {}
-
-
 def extract_metadata(
     file_data: bytes,
     filename: str,
@@ -74,9 +58,10 @@ def extract_metadata(
     extra: dict = {}
 
     if content_type.startswith("image/"):
+        # Captures and rendered frames are PNGs, so the image branch is the one
+        # that matters here. There is no PDF branch: nothing in this pipeline
+        # produces or consumes PDFs.
         extra = _extract_image_metadata(file_data)
-    elif content_type == "application/pdf":
-        extra = _extract_pdf_metadata(file_data)
 
     return FileMetadataDetail(
         filename=filename,

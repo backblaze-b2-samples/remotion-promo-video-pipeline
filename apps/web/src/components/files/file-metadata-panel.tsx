@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import type { FileMetadataDetail } from "@vibe-coding-starter-kit/shared";
+import type { FileMetadataDetail } from "@remotion-promo-video-pipeline/shared";
 
 interface FileMetadataPanelProps {
   metadata: FileMetadataDetail;
@@ -75,23 +75,6 @@ export function FileMetadataPanel({ metadata }: FileMetadataPanelProps) {
                     <MetaRow key={key} label={key} value={val} />
                   ))}
               </div>
-            )}
-          </>
-        )}
-
-        {/* PDF metadata */}
-        {metadata.pdf_pages !== null && (
-          <>
-            <Separator />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              PDF
-            </p>
-            <MetaRow label="Pages" value={metadata.pdf_pages} />
-            {metadata.pdf_author && (
-              <MetaRow label="Author" value={metadata.pdf_author} />
-            )}
-            {metadata.pdf_title && (
-              <MetaRow label="Title" value={metadata.pdf_title} />
             )}
           </>
         )}

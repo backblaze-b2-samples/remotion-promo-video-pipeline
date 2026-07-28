@@ -1,4 +1,4 @@
-import type { FileMetadata } from "@vibe-coding-starter-kit/shared";
+import type { FileMetadata } from "@remotion-promo-video-pipeline/shared";
 
 export interface TreeFolder {
   type: "folder";

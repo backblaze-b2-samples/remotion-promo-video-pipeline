@@ -1,3 +1,4 @@
-// Single source of truth for app identity. Rename here to rebrand a clone of this starter.
-export const APP_NAME = "OSS Starter Kit";
-export const APP_DESCRIPTION = "File management dashboard powered by Backblaze B2";
+// Single source of truth for app identity. Rename here to rebrand a clone of this app.
+export const APP_NAME = "Promo Render Pipeline";
+export const APP_DESCRIPTION =
+  "Agent-driven promo video rendering, archived on Backblaze B2";

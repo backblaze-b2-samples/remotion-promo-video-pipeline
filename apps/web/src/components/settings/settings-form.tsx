@@ -39,7 +39,7 @@ const settingsSchema = z.object({
   bio: z.string().max(160, "Bio must be 160 characters or fewer").optional(),
   theme: z.enum(["light", "dark", "system"]),
   defaultView: z.enum(["grid", "list", "tree"]),
-  emailOnUpload: z.boolean(),
+  notifyOnRender: z.boolean(),
   warnNearQuota: z.boolean(),
   quotaThreshold: z
     .string()
@@ -57,7 +57,7 @@ const defaultValues: SettingsValues = {
   bio: "",
   theme: "system",
   defaultView: "tree",
-  emailOnUpload: false,
+  notifyOnRender: false,
   warnNearQuota: true,
   quotaThreshold: "80",
 };
@@ -112,7 +112,7 @@ export function SettingsForm() {
                   <FormLabel>Bio</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="A short description of this workspace"
+                      placeholder="What this promo workspace is for"
                       className="resize-none"
                       {...field}
                     />
@@ -164,7 +164,7 @@ export function SettingsForm() {
               name="defaultView"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Default file view</FormLabel>
+                  <FormLabel>Default bucket-explorer view</FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
@@ -190,13 +190,13 @@ export function SettingsForm() {
 
             <FormField
               control={form.control}
-              name="emailOnUpload"
+              name="notifyOnRender"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-md border border-border p-3">
                   <div className="space-y-0.5">
-                    <FormLabel>Email me on every upload</FormLabel>
+                    <FormLabel>Email me when a render pass finishes</FormLabel>
                     <FormDescription>
-                      You&apos;ll get a receipt for each successful upload.
+                      A pass can take minutes; a receipt saves watching the progress bar.
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -223,7 +223,7 @@ export function SettingsForm() {
                   <div className="grid gap-1.5 leading-none">
                     <FormLabel>Warn me when approaching quota</FormLabel>
                     <FormDescription>
-                      Shows a banner once usage crosses your threshold.
+                      Frame intermediates dominate bucket growth, so this trips sooner than you expect.
                     </FormDescription>
                   </div>
                 </FormItem>
@@ -235,7 +235,7 @@ export function SettingsForm() {
               name="quotaThreshold"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Quota warning threshold (%)</FormLabel>
+                  <FormLabel>Storage warning threshold (%)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"

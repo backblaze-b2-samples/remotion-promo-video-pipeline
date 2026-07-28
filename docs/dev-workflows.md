@@ -1,4 +1,4 @@
-<!-- last_verified: 2026-07-27 -->
+<!-- last_verified: 2026-07-28 -->
 # Dev Workflows
 
 Engineering workflows for this repo.
@@ -11,7 +11,7 @@ Engineering workflows for this repo.
 - [ ] Implement the smallest coherent change
 - [ ] Add or update tests
 - [ ] Run: `pnpm verify`
-- [ ] Update docs in the same PR (see AGENTS.md §9)
+- [ ] Update docs in the same PR (see AGENTS.md §10)
 - [ ] Move plan to `docs/exec-plans/completed/` after validation
 
 ## Bugfix
@@ -30,7 +30,7 @@ Engineering workflows for this repo.
 
 ## Documentation Update
 
-- [ ] Update only the canonical location (see AGENTS.md §9 doc update mapping)
+- [ ] Update only the canonical location (see AGENTS.md §10 doc update mapping)
 - [ ] Never duplicate content — link instead
 - [ ] Update `<!-- last_verified: YYYY-MM-DD -->` header
 
@@ -77,18 +77,55 @@ wildcards one after the other, because a dual-stack `::` bind on Linux collides
 with a concurrently held `0.0.0.0` bind and would report a free port as busy.
 
 ### Test types
-- **Unit**: pure logic (service layer)
-- **Integration**: HTTP handlers, B2 connectivity (`tests/`)
-- **Structural**: layering rules, import boundaries (`tests/test_structure.py`)
-- **E2E**: Playwright browser-driven smoke tests
+- **Unit (pure)**: beat-grid snapping, key builders + delete scoping, amplification
+  maths, variant geometry, the storyboard-editor reducer, the amplification
+  formatter. No B2, no ffmpeg, no render.
+- **Integration**: HTTP handlers against a monkeypatched repo layer
+  (`tests/test_promo_routes.py` uses an in-memory `FakeBucket`)
+- **Structural**: layering rules, import boundaries, the 300-line cap
+  (`tests/test_structure.py`)
+- **E2E**: Playwright route smoke tests
+
+**Nothing in `pnpm verify` renders a frame or talks to B2.** That is deliberate:
+the suite must stay runnable with no credentials, no Chrome and no ffmpeg. The
+render path is exercised by hand — see "Running a real render" below.
 
 ### Test placement
 - Backend: `services/api/tests/`
+- Frontend unit: co-located `*.test.ts` next to the module (`apps/web/src/lib/`)
 - E2E: `apps/web/e2e/` with config in `apps/web/playwright.config.ts`
+
+### Running a real render (manual)
+
+A render is not part of any automated gate, so verify it by hand after touching
+`packages/remotion/`, `service/render_*`, `service/encode.py` or the key layout:
+
+1. `pnpm dev` (or `pnpm dev:api` plus `pnpm dev:web`) with real B2 credentials
+2. Optional: `pnpm run setup:capture` so captures are real screenshots
+3. Create a promo at `/promos/new` with the `release-teaser` preset
+4. Press **Render** and watch the phases advance; a `demo` pass is ~2 minutes
+5. Confirm on the detail page: both variants play, the poster is a real frame, the
+   frame strip paints, and the manifest shows a non-zero amplification ratio
+6. Confirm in `/files` that `frames/<job-id>/pass-01/<variant>/` really holds
+   `frame-000000.png` … and that `renders/<job-id>/` holds the MP4 + poster
+
+To exercise the render CLI on its own, without the API:
+
+```bash
+node packages/remotion/render-frames.mjs \
+  --storyboard /tmp/storyboard.json --variant master-16x9 \
+  --out-dir /tmp/frames --frame-range 0-9 --concurrency 2
+```
+
+Its stdout must be **only** NDJSON. Piping it through `jq -c .` is the quickest way
+to catch a stray non-JSON write.
 
 ### Commands
 - Agent docs health: `pnpm check:agent-docs`
 - Cold-start setup: `pnpm run setup`
+- Opt-in capture browser: `pnpm run setup:capture` (Playwright Chromium, ~150 MB)
+- Demo audio bed + SFX: `pnpm run make-demo-assets` (needs the API running)
+- Remotion Studio: `pnpm run studio`
 - Preflight environment check: `pnpm run doctor`
 - Canonical pre-PR suite: `pnpm verify`
 - Backend half only: `pnpm verify:api`
@@ -100,14 +137,14 @@ with a concurrently held `0.0.0.0` bind and would report a free port as busy.
 - Frontend typecheck: `pnpm typecheck`
 - Frontend lint: `pnpm lint`
 - Backend lint: `pnpm lint:api`
-- E2E: `pnpm test:e2e` (run `pnpm --filter @vibe-coding-starter-kit/web exec playwright install chromium` once first)
+- E2E: `pnpm test:e2e` (run `pnpm --filter @remotion-promo-video-pipeline/web exec playwright install chromium` once first)
 
 `pnpm check:agent-docs` validates the canonical `AGENTS.md` surface, thin
 cross-agent shims, command docs, CI claims, and `.env` ignore coverage
 (`scripts/check-agent-docs.mjs`, helpers in `scripts/agent-docs/`). It is
 dependency-free by design — it runs without `pnpm install`, which is why its CI
 job skips the install step. Register every new agent shim there so it can't be
-emptied or unlinked from `AGENTS.md` unnoticed (see AGENTS.md §9). A file that
+emptied or unlinked from `AGENTS.md` unnoticed (see AGENTS.md §10). A file that
 is missing *or* empty fails its own assertion rather than skipping the group it
 belongs to.
 
@@ -221,8 +258,9 @@ to components.
 **Read** — use the hooks directly:
 
 ```tsx
-const { data, isLoading, error, refetch } = useFiles(prefix, limit);
-const { data: stats } = useFileStats();
+const { data: promos, isLoading, error, refetch } = usePromos();
+const { data: stats } = usePipelineStats();
+const { data: progress } = usePromoProgress(jobId); // polls only while rendering
 ```
 
 Surface errors via `<ErrorState error={error} onRetry={() => refetch()} />`
@@ -231,14 +269,21 @@ rather than silently rendering empty UI.
 **Write** — wrap mutations with `useMutation` and invalidate on success:
 
 ```tsx
-const deleteMutation = useDeleteFile();
-deleteMutation.mutate(file.key, {
-  onSuccess: () => toast.success("Deleted"),
+const render = useRenderPromo();
+render.mutate(jobId, {
+  onSuccess: (progress) => toast.success(`Pass ${progress.pass_number} queued`),
 });
 ```
 
-`useDeleteFile()` already calls `queryClient.invalidateQueries({ queryKey: qk.all })`
-on success — every consumer of `useFiles` / `useFileStats` re-fetches lazily.
+The promo mutations already invalidate `pk.all` (and `qk.all` where a bucket
+listing is affected) on success, so every consumer re-fetches lazily. Query keys
+live in two namespaces on purpose: `qk` for bucket/file queries, `pk` for promo
+queries — invalidating one must not blow away the other.
+
+`usePromoProgress` is the only polling query. It polls every 1.5s while
+`status === "rendering"` and stops otherwise, and when a pass finishes it
+invalidates both namespaces so the new variants, poster, manifest and dashboard
+stats appear without a manual refresh.
 
 **Add a new endpoint** — three places to touch:
 1. `services/api/app/runtime/<router>.py` — FastAPI route

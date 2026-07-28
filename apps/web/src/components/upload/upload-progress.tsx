@@ -21,7 +21,7 @@ import { humanizeBytes } from "@/lib/utils";
 import type {
   FileMetadataDetail,
   FileStatus,
-} from "@vibe-coding-starter-kit/shared";
+} from "@remotion-promo-video-pipeline/shared";
 
 export interface UploadItem {
   id: string;

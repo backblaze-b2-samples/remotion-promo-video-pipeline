@@ -24,7 +24,7 @@ import { FileTreeRow } from "./file-tree-row";
 import { ApiError, getDownloadUrl } from "@/lib/api-client";
 import { useDeleteFile, useFiles } from "@/lib/queries";
 import { buildFileTree, type TreeFolder } from "@/lib/file-tree";
-import type { FileMetadata } from "@vibe-coding-starter-kit/shared";
+import type { FileMetadata } from "@remotion-promo-video-pipeline/shared";
 
 export function FileBrowser() {
   const { data: files = [], isLoading, isFetching, error, refetch } = useFiles();
@@ -142,9 +142,9 @@ export function FileBrowser() {
               description="Upload some files to see them listed here."
               action={
                 <Button asChild size="sm">
-                  <Link href="/upload">
+                  <Link href="/ingest">
                     <Upload aria-hidden="true" className="h-3.5 w-3.5" />
-                    Upload files
+                    Ingest assets
                   </Link>
                 </Button>
               }

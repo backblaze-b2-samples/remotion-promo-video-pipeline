@@ -15,9 +15,9 @@ export default function FilesPage() {
           </p>
         </div>
         <Button asChild size="sm" className="h-8 shrink-0">
-          <Link href="/upload">
+          <Link href="/ingest">
             <Upload aria-hidden="true" className="h-3.5 w-3.5" />
-            Upload files
+            Ingest assets
           </Link>
         </Button>
       </div>

@@ -1,4 +1,4 @@
-<!-- last_verified: 2026-06-25 -->
+<!-- last_verified: 2026-07-28 -->
 # Reliability
 
 Reliability expectations and practices for this project.
@@ -28,6 +28,48 @@ Reliability expectations and practices for this project.
 - `/metrics` endpoint exposes basic Prometheus-format counters
 - Upload success/failure counts tracked
 
+## Render Passes — single worker, resume from B2
+
+A render pass saturates the machine (headless Chrome rasterizing N frames per
+variant, then an x264 encode), so passes run **one at a time** in an in-process
+`ThreadPoolExecutor(max_workers=1)` (`app/service/jobs.py`), with progress in a
+lock-guarded in-memory registry. This is the same stance the starter takes for its
+in-process rate limiter, and it is correct for a sample and wrong for production.
+
+Consequences to plan for:
+
+- **In-flight progress is lost on restart.** `GET /promos/{id}/progress` falls back
+  to the stored manifest, so a reloaded page reports the truth (idle / last pass)
+  rather than a stale "rendering".
+- **The pass itself is recoverable.** A pass is only appended to the manifest when
+  it completes, so a killed pass keeps the same `pass-<NN>` number on the next
+  attempt, which lands on the same `frames/<job>/pass-NN/<variant>/` prefix. The
+  attempt lists that prefix, renders **only the missing tail** via Remotion's
+  `frameRange`, and downloads the frames that already landed so the encode still
+  sees a complete sequence. That is the reason B2 — and not `/tmp` — is the
+  intermediate store.
+- **Partial-pass artifacts are visible, not hidden.** Orphaned frames from an
+  abandoned attempt stay under their pass prefix (they are what makes the resume
+  work) and are removed with the promo by the prefix-scoped delete.
+- **Multiple API replicas would each run their own worker.** Production wants a real
+  queue (Celery / RQ / Cloud Tasks) that keeps the same resume semantics: pass
+  number derived from the manifest, missing-frame scan against B2.
+- **A second concurrent pass is refused, not queued per-promo.** `POST
+  /promos/{id}/render` returns `409` while that promo has a render in flight.
+- **Long-running pass ceilings.** The render subprocess is bounded at 1 hour and an
+  ffmpeg encode at 30 minutes, so a wedged child can never hold the single worker
+  forever.
+
+## Frame Upload Volume
+
+`FRAME_UPLOAD_ENABLED=true` is the point of this sample, not an accident, and the
+frame path is built for the volume: `repo/b2_frames.put_frames()` runs
+`FRAME_UPLOAD_CONCURRENCY` (default 8, hard-capped at 32) uploads at a time and
+invalidates the bucket-listing cache **once** per batch rather than 1,086 times.
+Setting `FRAME_UPLOAD_ENABLED=false` keeps the pipeline working — frame accounting
+then falls back to local file sizes — but removes the resume capability, because
+there is nothing in B2 to resume from.
+
 ## Stateful Counters — durability caveats
 
 The download counter and the `/metrics` counters are **in-process, per replica**. Consequences to plan for before scaling:
@@ -42,12 +84,28 @@ The download counter and the `/metrics` counters are **in-process, per replica**
 
 ## Graceful Degradation
 
-- File listing returns empty list (not error) when B2 has no objects
+- File listing returns an empty list (not an error) when B2 has no objects
 - Metadata extraction failures don't block upload (return partial metadata)
-- Frontend shows skeleton states while loading, error states on failure
+- **A missing capture browser never fails a render.** With no Playwright Chromium
+  installed, capture ingest falls back to a Pillow-drawn placeholder card and says
+  so in the response (`engine: "placeholder"`), so a cold clone is demoable end to
+  end without a 150 MB download.
+- **An expired capture URL degrades to a drawn mock.** `CaptureImage` in the
+  Remotion cards handles `onError` by rendering the mock UI, so one stale presigned
+  URL cannot fail a 1,086-frame pass.
+- **A malformed JSON document is treated as missing**, so a half-written manifest
+  cannot make the whole promo list unreadable.
+- **A missing binary returns 503, not 500**, with a message naming every place the
+  app looked and how to install it — ffmpeg (`FFMPEG_BINARY` → bundled
+  `imageio-ffmpeg` → `PATH`) and node (`NODE_BINARY` → `PATH`).
+- Frontend shows skeleton states while loading, error states on failure, and a
+  phase-labelled progress panel while a pass is in flight
 
 ## Deployment
 
+- The API host needs Chrome (Remotion downloads Chrome Headless Shell on first
+  render), ffmpeg (bundled with `imageio-ffmpeg`) and scratch disk for one pass of
+  frames — roughly 2 GB for the `full` preset.
 - Railway health checks on `/health`
 - Zero-downtime deploys via rolling updates
 - Environment-specific configuration via env vars (no config files in prod)

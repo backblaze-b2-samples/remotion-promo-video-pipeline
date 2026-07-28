@@ -108,6 +108,9 @@ def validate_extension_matches_type(filename: str, content_type: str) -> bool:
     return ext in allowed_exts
 
 
+DEFAULT_FOLDER = "uploads/"
+
+
 class UploadError(Exception):
     """Raised when upload validation fails."""
 
@@ -122,8 +125,14 @@ def process_upload(
     filename: str,
     content_type: str,
     content_length: int | None = None,
+    folder: str = DEFAULT_FOLDER,
 ) -> FileUploadResponse:
-    """Validate and process a file upload. Raises UploadError on failure."""
+    """Validate and process a file upload. Raises UploadError on failure.
+
+    `folder` is the key prefix (always ending in "/") the object lands under.
+    `/ingest` uses it to file brand assets and audio beds directly into
+    `assets/<product>/...` instead of a generic `uploads/` bucket root.
+    """
     if not filename:
         raise UploadError("No filename provided")
 
@@ -162,7 +171,8 @@ def process_upload(
 
     # B2 buckets are always versioned — uploading the same key creates a new
     # version automatically.  No duplicate rejection needed.
-    key = f"uploads/{safe_name}"
+    prefix = folder if folder.endswith("/") else f"{folder}/"
+    key = f"{prefix}{safe_name}"
     result = upload_file(file_data, key, content_type)
     metadata = extract_metadata(
         file_data, safe_name, content_type, result.uploaded_at

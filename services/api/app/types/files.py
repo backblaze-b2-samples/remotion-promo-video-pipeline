@@ -27,10 +27,6 @@ class FileMetadataDetail(BaseModel):
     image_width: int | None = None
     image_height: int | None = None
     exif: dict | None = None
-    # PDF-specific
-    pdf_pages: int | None = None
-    pdf_author: str | None = None
-    pdf_title: str | None = None
     # Audio/Video
     duration_seconds: float | None = None
     codec: str | None = None

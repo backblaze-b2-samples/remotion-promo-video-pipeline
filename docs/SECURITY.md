@@ -1,18 +1,35 @@
-<!-- last_verified: 2026-07-27 -->
+<!-- last_verified: 2026-07-28 -->
 # Security
 
-Security principles and implementation for the vibe-coding-starter-kit.
+Security principles and implementation for the Remotion Promo Video Pipeline.
 
 ## Trust Boundaries
 
 - **Frontend -> API**: CORS-restricted to configured origins, scoped to `GET/POST/DELETE/OPTIONS`. `allow_credentials` is `False` (no cookie/session auth today); enable it only alongside real auth and a tightened origin allowlist.
-- **API -> B2**: Authenticated via `B2_KEY_ID` + `B2_APPLICATION_KEY`, signature v4
-- **Client -> B2**: Presigned URLs for download (10-min expiry, `Content-Disposition: attachment`)
+- **Frontend -> API**: also allows `PATCH` (the storyboard editor bumps a revision through it).
+- **API -> B2**: Authenticated via `B2_APPLICATION_KEY_ID` + `B2_APPLICATION_KEY`, signature v4. The endpoint is derived from `B2_REGION` (`settings.s3_endpoint`), so no region literal is baked into source and no `B2_ENDPOINT` is required.
+- **Client -> B2**: **Presigned URLs are the only read path for renders, posters, captures and audio.** No object is ever proxied through the API and no bucket needs to be public. Downloads force `Content-Disposition: attachment` (10-min expiry); media this app produced itself is presigned `inline` with a 1-hour expiry so `<video>`, `<audio>` and `<img>` can paint it. Treat a presigned URL as a short-lived credential: never log one or commit one into a fixture.
+- **Headless Chrome -> B2**: the renderer has no B2 credentials. `service/render_payload.py` swaps each shot's capture *key* for a presigned inline URL in the render input props — the same private-bucket path the browser uses.
 
 ## Authentication & Multi-Tenancy
 
 - **No auth by design.** The file API (`/files`, `/files-by-key`, `/upload`) is unauthenticated and bucket-wide — any client can list, download, and delete every object. Acceptable for a single-tenant demo; the rate limiter guards the open endpoints.
 - **Adding auth to a clone does not close this automatically.** A login screen alone leaves an open, cross-user file API. You must both (1) require auth on every file route and (2) scope listings and reads to the caller's own prefixes — skipping either lets one signed-in user read and delete another's files. See the co-located notes in `runtime/files.py` and `service/files.py`.
+
+## Prefix-Scoped Deletes
+
+- `types/keys.job_prefixes(job_id)` is the single definition of what a promo owns:
+  `storyboards/<id>.json`, `frames/<id>/`, `renders/<id>/`, `manifests/<id>.json`.
+  `DELETE /promos/{id}` walks exactly those four and nothing else.
+- **There is no bucket-wide delete path anywhere in this codebase.** `repo/b2_frames.delete_prefix()` refuses an empty, `/` or `*` prefix, and every caller passes a `job_prefixes()` entry. Shared material under `assets/` is never touched by a promo delete.
+- Prefixes always carry a trailing slash, so deleting promo `abc` cannot sweep promo `abc123`. Regression-guarded by `tests/test_keys.py` and `tests/test_promo_routes.py`.
+- `ALLOWED_KEY_PREFIX` remains available to confine key-addressed reads/deletes when the bucket is shared with other workloads.
+
+## Local Subprocesses
+
+- Two external processes are spawned: `node packages/remotion/render-frames.mjs` and ffmpeg. Both are invoked with an **argv list, never a shell string**, so a storyboard value can never become a shell injection.
+- ffmpeg and node paths are resolved from `FFMPEG_BINARY` / `NODE_BINARY`, then a bundled wheel, then `PATH` — never from request data.
+- Storyboard-driven values (card ids, SFX ids, accents, variants) are validated against the shared JSON allow-lists before they reach a subprocess or a key builder; product slugs go through `types/keys.slugify()`, which strips `/` and `..`.
 
 ## Upload Validation
 
@@ -36,8 +53,8 @@ Security principles and implementation for the vibe-coding-starter-kit.
 
 ## Download Safety
 
-- Presigned URLs force `Content-Disposition: attachment`
-- Prevents inline rendering of user-uploaded content (XSS mitigation)
+- Presigned URLs for *user-uploaded* content force `Content-Disposition: attachment`, which prevents inline rendering of an upload in the app's origin (XSS mitigation)
+- The `inline` disposition is used **only** for media this pipeline generated itself: variant MP4s, posters, rendered frames, captures and the synthesized audio bed. SVG stays off the upload allow-list either way
 
 ## Response Hardening
 

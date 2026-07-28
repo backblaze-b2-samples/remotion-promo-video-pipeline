@@ -1,0 +1,41 @@
+{
+  "note": "One source of truth for the delivery variants, read by both packages/remotion (src/lib/variant.ts) and the API (services/api/app/types/variants.py). Pixel dimensions are derived from the render tier (720 or 1080 short edge) so the same list serves both RENDER_PRESET values.",
+  "variants": [
+    {
+      "id": "master-16x9",
+      "label": "Master 16:9",
+      "aspect_w": 16,
+      "aspect_h": 9,
+      "fit": "contain",
+      "muted": false,
+      "purpose": "Landing pages, YouTube, docs embeds."
+    },
+    {
+      "id": "vertical-9x16",
+      "label": "Vertical 9:16",
+      "aspect_w": 9,
+      "aspect_h": 16,
+      "fit": "cover",
+      "muted": false,
+      "purpose": "Shorts / Reels / TikTok. Re-rendered, never cropped from the master."
+    },
+    {
+      "id": "square-1x1",
+      "label": "Square 1:1",
+      "aspect_w": 1,
+      "aspect_h": 1,
+      "fit": "cover",
+      "muted": false,
+      "purpose": "In-feed social posts."
+    },
+    {
+      "id": "loop-muted-16x9",
+      "label": "Muted loop 16:9",
+      "aspect_w": 16,
+      "aspect_h": 9,
+      "fit": "contain",
+      "muted": true,
+      "purpose": "Autoplaying hero loop — must read with no audio."
+    }
+  ]
+}

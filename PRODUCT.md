@@ -6,59 +6,67 @@ product
 
 ## Users
 
-AI coding agents and "vibe coders" (developers who lean on AI to move fast) who clone
-this kit as the foundation for a new full-stack app. Their context: they want to skip
-the boilerplate loop (dashboard, upload, file browser, cloud storage wiring) and go
-straight to building their app's unique features. They read the repo, keep the shared
-scaffolding, and rebrand + rewrite the dashboard for their own use case.
+Product-marketing and DevRel teams who ship a promo clip for every release, and
+the **coding agents** that increasingly do that work for them (video-shotcraft is
+itself a Claude Code / Codex skill). Their context: a storyboard is never right the
+first time, so they re-render constantly, and each release needs the same video in
+four aspect ratios. They care about being able to go back — to a previous
+revision, to the exact frames a shipped cut was made from, to the capture that was
+current when the claim was true.
 
 ## Product Purpose
 
-A production-ready full-stack starter kit (Next.js 16 + React 19 + Tailwind v4 +
-shadcn/ui frontend, FastAPI backend) with Backblaze B2 cloud storage integrated out of
-the box. It ships a dashboard, drag-and-drop upload, and a file browser so builders
-start from a working app, not a blank page. Success = a builder can clone it, run it,
-rebrand it via one config file, and trust every screen enough to build on top without
-first fixing it.
+A promo-video render pipeline whose entire production trail lives in Backblaze B2:
+captures, brand assets, the audio bed, every rendered PNG frame, every finished
+variant, and a delivery manifest. Success = a team (or their agent) can render a
+promo, revise it, re-render it, and still answer "what exactly produced this file?"
+months later — while seeing, in real numbers, how much intermediate data a finished
+40 MB MP4 actually costs.
+
+The unusual claim this app makes is measured, not asserted: the dashboard's
+headline stat is **write amplification**, computed from the manifests
+(`frame_bytes` vs `variant_bytes`), because that ratio is the whole reason this
+workload belongs on object storage rather than a laptop's `/tmp`.
 
 ## Brand Personality
 
-Confident, precise, quietly professional. Voice is direct and free of hype ("Stop
-wiring boilerplate and start building"). The interface should feel like a modern
-developer tool — considered, calm, trustworthy — not a marketing showpiece. It is a
-**neutral foundation** that others rebrand: the design carries craft through restraint,
-not through a strong opinionated identity of its own.
+Confident, precise, quietly technical. Voice is direct and specific — it quotes
+1,086 frames rather than "lots of data". The interface should feel like a render
+farm's control panel: calm, legible, honest about cost. It is a developer tool that
+happens to produce video, not a video app that happens to have an API.
 
 ## Anti-references
 
 - **Generic AI/SaaS slop.** No gradient text, hero-metric templates, identical
-  icon-card grids, tracked uppercase eyebrows, or decorative glassmorphism. These are
-  the exact 2026 AI tells this kit exists to help builders avoid.
-- **Over-branded / loud.** No heavy brand-color drenching, decorative motion, or flashy
-  effects. It is scaffolding to be rebranded, not a hero page.
-- **Toy / prototype feel.** No missing states, inconsistent components, or placeholder
-  polish. Must read as production-grade.
-- **Enterprise-drab.** No Bootstrap-era gray boxes or dense-but-lifeless admin-panel
-  look. Considered, like modern dev tools (Linear, GitHub Primer, Stripe).
+  icon-card grids, tracked uppercase eyebrows, or decorative glassmorphism.
+- **Consumer video-editor chrome.** No skeuomorphic timelines, no faux-hardware
+  scrubbers, no purple-to-pink "creative" gradients. The timeline here is a
+  proportional strip because that is what communicates beat snapping.
+- **Marketing-deck optimism about cost.** Do not hide or round away the
+  intermediate byte totals; the numbers are the point.
+- **Toy / prototype feel.** No missing states, no placeholder posters where real
+  media exists, no "coming soon" panels.
 
 ## Design Principles
 
-- **Practice what you preach.** The kit itself must model the production quality it
-  asks agents to produce. Slop here propagates into every project built on it.
-- **Neutral foundation, easy to rebrand.** Identity lives in tokens (`globals.css`) and
-  one config file. Screens are built from the shared UI kit so a rebrand is a token
-  swap, not a rewrite.
-- **Earned familiarity over novelty.** Use standard, trusted affordances (top bar +
-  side nav, command palette, data tables). The tool disappears into the task.
-- **Every state is designed.** Default, hover, focus, active, disabled, loading (skeleton),
-  empty (teaches the interface), and error (says what's wrong + offers retry) — never
-  half-shipped.
-- **Consistency is the feature.** One button vocabulary, one form-control set, one icon
-  style across every screen. Divergence is a bug.
+- **Show the artifact, not a placeholder.** Every list row has a real poster frame,
+  every variant plays inline, and the frame strip reads actual PNGs back out of
+  B2. If media exists, it is on screen.
+- **Numbers with units and provenance.** Bytes are humanized, ratios carry an `x`,
+  and every stat names the prefix it was computed from (`frames/`, `renders/`).
+- **Cost is a first-class UI concern.** The create form tells you how many PNGs the
+  next pass will write *before* you press Render.
+- **Every state is designed.** Default, hover, focus, active, disabled, loading
+  (skeleton), empty (teaches the interface), error (says what's wrong + retry),
+  and — specific to this app — *in flight*, with a phase label and a real
+  frames-rendered count.
+- **Consistency is the feature.** One button vocabulary, one form-control set, one
+  icon style. Finite choices are always selectors, never free text.
 
 ## Accessibility & Inclusion
 
-Target **WCAG 2.1 AA**. Body text ≥ 4.5:1, large/bold text ≥ 3:1, visible focus
+Target **WCAG 2.1 AA**. Body text >= 4.5:1, large/bold text >= 3:1, visible focus
 indicators on every interactive element, full keyboard navigation, correct semantic
 landmarks and heading order, labelled form controls, and a `prefers-reduced-motion`
-alternative for every animation. Full light and dark theme parity.
+alternative for every animation. Render progress is announced via `aria-live` so a
+screen-reader user is not left guessing. Full light and dark theme parity.

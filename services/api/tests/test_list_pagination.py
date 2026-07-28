@@ -8,7 +8,7 @@ capped at the first page.
 
 from datetime import UTC, datetime
 
-from app.repo import b2_client
+from app.repo import b2_client, b2_stats
 
 
 class _FakePaginatedS3:
@@ -59,9 +59,11 @@ def test_list_files_follows_continuation_token(monkeypatch):
 
 
 def test_upload_stats_counts_all_pages(monkeypatch):
+    # get_upload_stats lives in b2_stats (split out of b2_client to stay under
+    # the 300-line ceiling) but reuses b2_client's cached listing.
     _install_fake_client(monkeypatch)
 
-    stats = b2_client.get_upload_stats()
+    stats = b2_stats.get_upload_stats()
 
     assert stats["total_files"] == 3
     assert stats["total_size_bytes"] == 30
