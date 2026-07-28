@@ -120,9 +120,17 @@ def encode_variant(
         "-movflags",
         "+faststart",
     ]
-    # `-shortest` so a longer bed is trimmed to the visual duration instead of
-    # padding the MP4 with a still final frame.
-    args += ["-c:a", "aac", "-b:a", "128k", "-shortest"] if use_audio else ["-an"]
+    # Output duration must equal the *visual* duration, whatever the bed's length:
+    #   -shortest  trims a longer bed instead of padding the MP4 with a still frame
+    #   -af apad   pads a shorter bed with silence, so audio can never end the
+    #              output early (which silently truncated the video before)
+    # `service/audio.py` already picks a bed long enough; apad is the belt to that
+    # braces, and it covers a user-uploaded MP3 whose length cannot be probed.
+    args += (
+        ["-af", "apad", "-c:a", "aac", "-b:a", "128k", "-shortest"]
+        if use_audio
+        else ["-an"]
+    )
     args += [str(out_path)]
 
     _run(args, ENCODE_TIMEOUT_SECONDS, "ffmpeg encode")

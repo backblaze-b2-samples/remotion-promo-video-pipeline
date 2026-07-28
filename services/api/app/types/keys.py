@@ -51,8 +51,12 @@ def capture_key(product: str, viewport: str, name: str) -> str:
     return f"{capture_prefix(product)}{slugify(viewport, 'desktop')}/{slugify(name, 'capture')}@2x.png"
 
 
+def bgm_prefix(product: str) -> str:
+    return f"{asset_prefix(product)}audio/bgm/"
+
+
 def bgm_key(product: str, name: str) -> str:
-    return f"{asset_prefix(product)}audio/bgm/{slugify(name, 'bed')}.wav"
+    return f"{bgm_prefix(product)}{slugify(name, 'bed')}.wav"
 
 
 def sfx_key(product: str, category: str, name: str) -> str:

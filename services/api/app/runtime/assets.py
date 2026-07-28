@@ -73,10 +73,14 @@ def create_captures_endpoint(request: CaptureRequest):
 
 @router.post("/assets/demo-audio")
 def demo_audio_endpoint(request: AudioRequest):
-    """Synthesize and upload the demo audio bed + three SFX one-shots.
+    """Make sure this product has an audio bed + three SFX one-shots in B2.
 
     Same code path the renderer uses, so `pnpm run make-demo-assets` and a render
-    can never disagree about what the bed sounds like.
+    can never disagree about what the bed sounds like. Two consequences of sharing
+    it: `bed_key` is whatever the renderer *would* pick (an uploaded bed wins over
+    the synthesized one), and the bed synthesized here is only
+    `DEMO_BED_SECONDS` long — a longer pass re-synthesizes a longer one instead of
+    reusing this and shipping a truncated MP4.
     """
     from pathlib import Path
     from tempfile import TemporaryDirectory
@@ -84,7 +88,10 @@ def demo_audio_endpoint(request: AudioRequest):
     try:
         with TemporaryDirectory() as tmp:
             _, key = audio_service.ensure_audio_bed(
-                request.product, request.bpm, 8.0, Path(tmp) / "bed.wav"
+                request.product,
+                request.bpm,
+                audio_service.DEMO_BED_SECONDS,
+                Path(tmp) / "bed.wav",
             )
             sfx = audio_service.ensure_sfx_pack(request.product)
     except RuntimeError:

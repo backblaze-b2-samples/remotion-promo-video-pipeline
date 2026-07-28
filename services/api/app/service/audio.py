@@ -10,17 +10,23 @@ under `assets/<product>/audio/`. Consequences worth stating:
   before ffmpeg is resolved.
 * The bed is generated *at the job's BPM*, so the click lands exactly on the
   beat grid `types/beatgrid.py` snapped the shots to.
+
+Bed selection scans the whole `assets/<product>/audio/bgm/` prefix and is
+**duration-aware** — see `ensure_audio_bed`. Both properties are load-bearing:
+the first makes an uploaded bed actually replace the synthesized one, the second
+stops a bed left over from a shorter pass from truncating the MP4.
 """
 
 import io
 import logging
 import math
+import re
 import struct
 import wave
 from pathlib import Path
 
 from app.repo import get_object_bytes, get_presigned_inline_url, list_keys, upload_bytes
-from app.types.keys import bgm_key, sfx_key
+from app.types.keys import bgm_key, bgm_prefix, sfx_key
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +34,23 @@ SAMPLE_RATE = 44_100
 CHANNELS = 2
 SAMPLE_WIDTH = 2  # 16-bit PCM
 _PEAK = 32_767
+
+# Only these can be a bed; `service/upload.py` accepts exactly wav + mp3 audio.
+AUDIO_EXTENSIONS = (".wav", ".mp3")
+# Beds are read fully into memory to probe and to hand to ffmpeg, so the ceiling
+# matches the upload limit rather than being unbounded.
+MAX_BED_BYTES = 100 * 1024 * 1024
+# Extra tail on a freshly synthesized bed: frame-count / fps rounding must never
+# leave the bed a hair shorter than the pass.
+BED_HEADROOM_SECONDS = 0.5
+# One frame at 30fps — a bed this close to the pass length is close enough.
+_DURATION_TOLERANCE = 0.034
+# Our own beds, named by `bed_name()`. Anything else in the prefix is a user's.
+_SYNTH_BED_RE = re.compile(r"(?:^|/)pulse-\d+bpm\.wav$")
+
+# What `pnpm run make-demo-assets` synthesizes up front. Deliberately short (the
+# demo preset is 6s): a longer pass re-synthesizes a longer bed on demand.
+DEMO_BED_SECONDS = 8.0
 
 SFX_RECIPES = {
     # id -> (category, seconds, start_hz, end_hz, decay)
@@ -94,27 +117,95 @@ def synthesize_sfx(recipe: tuple[str, float, float, float, float]) -> bytes:
     return _write_wav(samples)
 
 
+def wav_duration_seconds(data: bytes) -> float | None:
+    """Exact duration of a WAV, or None when the bytes are not a readable WAV.
+
+    None means "unmeasurable here", not "zero": an uploaded MP3 bed is perfectly
+    usable, it just cannot be probed with the standard library. Callers treat
+    unmeasurable as acceptable because `service/encode.py` pads a short bed with
+    silence rather than letting it shorten the video.
+    """
+    try:
+        with wave.open(io.BytesIO(data), "rb") as handle:
+            rate = handle.getframerate()
+            if rate <= 0:
+                return None
+            return handle.getnframes() / float(rate)
+    except (wave.Error, EOFError, OSError):
+        return None
+
+
+def candidate_beds(product: str, bpm: int) -> list[str]:
+    """Beds under `assets/<product>/audio/bgm/` that may serve this job, best first.
+
+    A **user-uploaded** bed wins over our synthesized one: that is the documented
+    promise of Ingest -> "Audio bed", and honouring it here is what makes the
+    prefix, not a filename convention, the source of truth.
+
+    Synthesized beds for a *different* BPM are excluded — their clicks would land
+    off this job's beat grid, which is the one thing the bed exists to get right.
+    """
+    own = bgm_key(product, bed_name(bpm))
+    rows = [
+        row["Key"]
+        for row in list_keys(bgm_prefix(product))
+        if row["Key"].lower().endswith(AUDIO_EXTENSIONS)
+        and int(row.get("Size") or 0) <= MAX_BED_BYTES
+    ]
+    uploaded = sorted(key for key in rows if not _SYNTH_BED_RE.search(key))
+    return uploaded + [key for key in rows if key == own]
+
+
 def ensure_audio_bed(
     product: str, bpm: int, duration_seconds: float, local_path: Path
 ) -> tuple[Path, str]:
-    """Make the bed available locally and in B2. Returns (local path, B2 key).
+    """Make a bed that covers `duration_seconds` available locally and in B2.
 
-    Reuses the bed already in B2 when one exists for this product+BPM — the same
-    bed is correct for every pass at that tempo, so re-synthesizing it would
-    just churn the bucket.
+    Returns (local path, B2 key). The prefix — not a single conventional key — is
+    scanned, so an uploaded bed is really used and a bed left over from a shorter
+    pass is really replaced.
+
+    Reuse is **duration-aware**. Keying only on BPM was a silent truncation bug:
+    an 8s bed from `pnpm run make-demo-assets` would be reused for a 36.2s pass
+    and `ffmpeg -shortest` would cut the MP4 to 8s while every frame still
+    rendered and uploaded. A bed measurably shorter than the pass is therefore
+    skipped and re-synthesized at the pass length (plus a little headroom so
+    rounding can never leave it a hair short).
     """
-    key = bgm_key(product, bed_name(bpm))
     local_path.parent.mkdir(parents=True, exist_ok=True)
+    required = max(0.0, float(duration_seconds))
 
-    existing = [row for row in list_keys(key) if row["Key"] == key]
-    if existing:
-        local_path.write_bytes(get_object_bytes(key))
-        return local_path, key
+    for candidate in candidate_beds(product, bpm):
+        data = get_object_bytes(candidate)
+        measured = wav_duration_seconds(data)
+        if measured is not None and measured < required - _DURATION_TOLERANCE:
+            logger.info(
+                "Audio bed too short for this pass, skipping: key=%s bed=%.2fs pass=%.2fs",
+                candidate,
+                measured,
+                required,
+            )
+            continue
+        local_path.write_bytes(data)
+        logger.info(
+            "Reusing audio bed: key=%s bed=%s pass=%.2fs",
+            candidate,
+            f"{measured:.2f}s" if measured is not None else "unmeasured",
+            required,
+        )
+        return local_path, candidate
 
-    data = synthesize_bed(bpm, duration_seconds)
+    key = bgm_key(product, bed_name(bpm))
+    data = synthesize_bed(bpm, required + BED_HEADROOM_SECONDS)
     local_path.write_bytes(data)
     upload_bytes(data, key, "audio/wav")
-    logger.info("Synthesized audio bed: key=%s bytes=%d bpm=%d", key, len(data), bpm)
+    logger.info(
+        "Synthesized audio bed: key=%s bytes=%d bpm=%d seconds=%.2f",
+        key,
+        len(data),
+        bpm,
+        required + BED_HEADROOM_SECONDS,
+    )
     return local_path, key
 
 

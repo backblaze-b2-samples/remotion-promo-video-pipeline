@@ -73,8 +73,16 @@ consequences:
    even before ffmpeg has been resolved.
 
 If you replace the bed with licensed music, upload it to
-`assets/<product>/audio/bgm/` (Ingest → Audio bed) — the renderer prefers whatever
-is already in that prefix — and record its licence here.
+`assets/<product>/audio/bgm/` (Ingest → Audio bed) and record its licence here.
+`service/audio.py` lists that whole prefix and prefers an uploaded bed over the
+synthesized `pulse-<bpm>bpm.wav`, with two caveats worth knowing:
+
+- A **WAV** upload is length-checked. If it is shorter than the pass being
+  rendered it is skipped (with a log line) and the synthesized bed is used
+  instead, because a bed that runs out used to truncate the delivered MP4.
+- An **MP3** upload cannot be length-checked with the standard library, so it is
+  used as-is; if it runs out, `ffmpeg -af apad` pads the rest with silence. The
+  video is never shortened either way.
 
 ## Everything else
 

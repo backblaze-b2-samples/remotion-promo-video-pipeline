@@ -29,7 +29,7 @@ const KIND_OPTIONS = [
   {
     id: "audio" as const,
     label: "Audio bed",
-    hint: "assets/<product>/audio/bgm/ — replaces the synthesized bed",
+    hint: "assets/<product>/audio/bgm/ — WAV or MP3, preferred over the synthesized bed",
   },
   {
     id: "capture" as const,

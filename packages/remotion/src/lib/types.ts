@@ -27,10 +27,17 @@ export interface RenderStoryboard {
   shots: RenderShot[];
 }
 
-export interface PromoProps {
+/**
+ * Props of the one `<Composition>`. A `type` alias, not an `interface`, on
+ * purpose: Remotion constrains a composition's props to
+ * `Record<string, unknown>`, and only a type alias gets TypeScript's implicit
+ * index signature. As an interface, `Composition`'s generic silently widens to
+ * `Record<string, unknown>` and `calculateMetadata` loses every field type.
+ */
+export type PromoProps = {
   storyboard: RenderStoryboard;
   variant: string;
-}
+};
 
 export interface ShotProps {
   copy: { headline: string; sub: string };

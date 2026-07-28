@@ -197,7 +197,7 @@ single `put_object` is the honest, readable path.
 | `pnpm check:agent-docs` | Validate agent shims, command docs, CI claims, env-ignore coverage |
 | `pnpm verify` | Canonical non-live pre-PR suite — chains `check:agent-docs`, `verify:api`, `verify:web` |
 | `pnpm verify:api` | Backend half: ruff, pytest, structure tests |
-| `pnpm verify:web` | Frontend half: eslint, vitest, typecheck + build |
+| `pnpm verify:web` | Frontend half: eslint, vitest, `packages/remotion` typecheck, typecheck + build |
 | `pnpm verify:full` | `pnpm run doctor`, then `pnpm verify`, then Playwright E2E |
 | `pnpm build` / `pnpm lint` | Build / lint the frontend |
 | `pnpm test:web` / `pnpm test:api` | Unit tests |

@@ -58,17 +58,6 @@ def render_payload(storyboard: Storyboard) -> dict:
     }
 
 
-def _local_frame_bytes(out_dir: Path, total_frames: int) -> tuple[int, int]:
-    present = [
-        out_dir / frame_name(number)
-        for number in range(total_frames)
-        if (out_dir / frame_name(number)).exists()
-    ]
-    return len(present), sum(path.stat().st_size for path in present)
-
-
-
-
 def local_frame_bytes(out_dir: Path, total_frames: int) -> tuple[int, int]:
     """(count, bytes) of frames present on local disk. Used when frame upload is off."""
     present = [

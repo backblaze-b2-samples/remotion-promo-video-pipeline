@@ -110,6 +110,8 @@ only — **never an autofill button**. Edit forms open pre-filled and carry no h
 | Promo delete is prefix-scoped | `tests/test_keys.py`, `tests/test_promo_routes.py` |
 | Amplification maths + manifest round-trip | `tests/test_amplification.py` |
 | ffmpeg/node resolution errors are actionable | `tests/test_binary_resolution.py` |
+| Audio bed always covers the pass (no truncated MP4) | `tests/test_audio_bed.py` |
+| `packages/remotion` TSX typechecks | `pnpm typecheck:remotion` (inside `verify:web`) |
 | Card registry matches the shared JSON | throws at load in `packages/remotion/src/cards/index.ts` |
 | No bare print() | `ruff` rule T20 |
 | Import ordering | `ruff` rule I001 |
@@ -143,10 +145,11 @@ pnpm run studio         # Remotion Studio for the composition
 pnpm check:agent-docs   # agent instruction/documentation drift check
 pnpm verify             # canonical non-live pre-PR suite
 pnpm verify:api         # backend half of verify (lint, tests, structure)
-pnpm verify:web         # frontend half of verify (lint, unit tests, typecheck + build)
+pnpm verify:web         # frontend half of verify (lint, unit tests, typechecks + build)
 pnpm verify:full        # doctor + verify + Playwright E2E (needs a browser + a live local app)
 pnpm lint               # frontend lint (eslint)
 pnpm build              # frontend type check + build
+pnpm typecheck:remotion # tsc --noEmit over packages/remotion (the shot cards)
 pnpm test:web           # frontend unit tests (vitest)
 pnpm lint:api           # backend lint (ruff)
 pnpm test:api           # backend tests (pytest)
@@ -160,7 +163,8 @@ commands instead of these scripts. Never shorten them in docs or scripts.
 
 `pnpm verify` chains `pnpm check:agent-docs`, then `pnpm verify:api` (backend
 lint, tests, structural boundaries), then `pnpm verify:web` (frontend lint, unit
-tests, typecheck + build). CI (`.github/workflows/ci.yml`) runs those three as
+tests, the `packages/remotion` typecheck, typecheck + build). CI
+(`.github/workflows/ci.yml`) runs those three as
 parallel jobs. `pnpm verify` needs `services/api/.venv` (run `pnpm run setup`).
 See [docs/dev-workflows.md](docs/dev-workflows.md#commands) for the `verify:full`
 prerequisites.

@@ -135,6 +135,9 @@ to catch a stray non-JSON write.
 - Frontend unit: `pnpm test:web` (vitest, excludes e2e)
 - Structure: `pnpm check:structure`
 - Frontend typecheck: `pnpm typecheck`
+- Remotion package typecheck: `pnpm typecheck:remotion` (the shot cards and the
+  composition; part of `pnpm verify:web`, since a TSX error there would otherwise
+  surface only mid-render)
 - Frontend lint: `pnpm lint`
 - Backend lint: `pnpm lint:api`
 - E2E: `pnpm test:e2e` (run `pnpm --filter @remotion-promo-video-pipeline/web exec playwright install chromium` once first)
@@ -171,7 +174,8 @@ live there too.
 `pnpm verify` is the canonical non-live gate for PRs. It is composed of
 `pnpm check:agent-docs`, then `pnpm verify:api` (backend lint, backend tests,
 structural boundary tests), then `pnpm verify:web` (frontend lint, frontend
-unit tests, frontend typecheck + build) — so the agent-doc guard runs first and
+unit tests, the `packages/remotion` typecheck, frontend typecheck + build) — so
+the agent-doc guard runs first and
 CI can run all three checks as parallel jobs. `package.json` is the single
 source of truth for the literal command chain; when it changes, don't paste the
 new chain into docs — update the plain-language gate list here and in

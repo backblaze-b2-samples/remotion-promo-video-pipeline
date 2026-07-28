@@ -191,6 +191,9 @@ def run_pass(job_id: str, report: Reporter) -> RenderPass:
     if any(
         not variant_spec(variant, tier)["muted"] for variant in storyboard.variants
     ):
+        # The pass duration is an *input* to bed selection, not a hint: a bed
+        # shorter than the pass would be cut by `-shortest` and ship a truncated
+        # MP4. `ensure_audio_bed` re-synthesizes rather than reuse a short bed.
         audio_path, _ = ensure_audio_bed(
             storyboard.product,
             storyboard.bpm,

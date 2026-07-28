@@ -31,8 +31,8 @@ without requiring a 150 MB browser download to try the app.
 
 ## Outputs
 - `assets/<product>/captures/<viewport>/<name>@2x.png` — one PNG per viewport
-- `assets/<product>/brand/<name>` / `audio/bgm/<name>.wav` /
-  `captures/manual/<name>` for uploads
+- `assets/<product>/brand/<name>` / `audio/bgm/<name>` (WAV or MP3, under its own
+  filename) / `captures/manual/<name>` for uploads
 - Response reports `engine: "playwright" | "placeholder"` plus a `note` when
   degraded
 
@@ -53,6 +53,9 @@ without requiring a 150 MB browser download to try the app.
 - Upload with no `product` -> falls back to the generic `uploads/` prefix, exactly
   like the starter kit's plain dropzone
 - Re-capturing the same product+viewport overwrites the key (B2 keeps a version)
+- An uploaded **audio bed** keeps its own filename and is picked up from the prefix
+  by the renderer in preference to the synthesized `pulse-<bpm>bpm.wav` — see
+  [encode-and-variants.md](encode-and-variants.md) for the length rule that applies
 
 ## UX States (if applicable)
 - Empty: `/library` empty state points back at Ingest

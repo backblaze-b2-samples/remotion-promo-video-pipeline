@@ -2,7 +2,13 @@
 
 ## Register
 
-product
+A **developer tool that produces video** — a render pipeline with a control-panel
+UI, not a consumer video editor and not a marketing site. The register is that of
+an engineering console: concrete nouns (frames, passes, variants, prefixes, keys),
+numbers with units and provenance, and no claim that isn't computed from a
+manifest. Every screen is answerable to the question "what exactly produced this
+file?". If a sentence would fit in a launch tweet, it does not belong in this
+product's copy.
 
 ## Users
 

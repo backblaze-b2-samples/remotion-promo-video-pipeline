@@ -5,7 +5,8 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
-    "studio": "remotion studio src/index.ts"
+    "studio": "remotion studio src/index.ts",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@remotion-promo-video-pipeline/shared": "workspace:*",
