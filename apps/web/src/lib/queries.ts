@@ -60,7 +60,19 @@ export const qk = {
 
 export type Health = Awaited<ReturnType<typeof getHealth>>;
 
-export function useFiles(prefix = "", limit = 100) {
+/**
+ * Newest-first objects under `prefix`, capped at `limit`.
+ *
+ * The endpoint sorts the whole prefix newest-first and then slices, so `limit`
+ * genuinely hides the tail — a bucket-wide listing at 100 showed 96 frames while
+ * `/files/stats` reported 13,168 objects. `FILE_PAGE_SIZE` is therefore the
+ * browser's default and the caller is expected to disclose the truncation; see
+ * `FileBrowser`. 1,000 is the API's own ceiling (`service/files.get_files`).
+ */
+export const FILE_PAGE_SIZE = 500;
+export const FILE_PAGE_MAX = 1000;
+
+export function useFiles(prefix = "", limit = FILE_PAGE_SIZE) {
   return useQuery<FileMetadata[], ApiError>({
     queryKey: qk.files(prefix, limit),
     queryFn: () => getFiles(prefix, limit),
@@ -154,11 +166,25 @@ export const pk = {
 };
 
 const PROGRESS_POLL_MS = 1500;
+// Slower than the detail page's progress poll: the list only needs to notice a
+// pass starting or finishing, and each refetch is a bucket listing plus one GET
+// per promo.
+const LIST_POLL_MS = 5000;
 
+/**
+ * The promo list. Polls only while at least one row has a pass in flight, so a
+ * running pass stops being indistinguishable from a finished one — the list used
+ * to never refetch at all, and a row that read "Draft" when a pass started still
+ * read "Draft" when it had produced two variants.
+ */
 export function usePromos() {
   return useQuery<PromoSummary[], ApiError>({
     queryKey: pk.list(),
     queryFn: getPromos,
+    refetchInterval: (q) =>
+      q.state.data?.some((promo) => promo.status === "rendering")
+        ? LIST_POLL_MS
+        : false,
   });
 }
 

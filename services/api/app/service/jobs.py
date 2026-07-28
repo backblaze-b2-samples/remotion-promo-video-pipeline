@@ -126,13 +126,36 @@ def get_progress(job_id: str) -> RenderProgress:
     return RenderProgress(
         job_id=job_id,
         status="rendered" if passes else "draft",
-        phase="done" if passes else "queued",
+        # A never-rendered promo is "idle", not "queued": nothing is waiting on
+        # the worker, and saying "Queued" next to "No render yet" left first-time
+        # users waiting for a pass that was never scheduled.
+        phase="done" if passes else "idle",
         pass_number=len(passes),
         total=passes[-1].duration_frames if passes else 0,
         rendered=passes[-1].duration_frames if passes else 0,
         message="Idle" if passes else "No render yet",
         updated_at=passes[-1].finished_at if passes else datetime.now(UTC),
     )
+
+
+def rendering_job_ids() -> set[str]:
+    """Job ids with a pass actually in flight in this process.
+
+    The read-side projections (`service/promo_views.py`) derive status from the
+    manifest, which only gains an entry when a pass *finishes* — so without this
+    a running pass was indistinguishable from a finished or never-started one and
+    the UI's existing `rendering` badge and "Render in flight" disabled state
+    could never engage.
+
+    In-process only, like the progress registry: see this module's docstring for
+    what that costs and `docs/RELIABILITY.md` for the production stance.
+    """
+    with _lock:
+        return {
+            job_id
+            for job_id, future in _running.items()
+            if future is not None and not future.done()
+        }
 
 
 def forget(job_id: str) -> None:

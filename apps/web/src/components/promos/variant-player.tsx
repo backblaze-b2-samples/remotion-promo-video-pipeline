@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Video } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,15 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { humanizeBytes } from "@/lib/utils";
 import type { VariantPlayback } from "@remotion-promo-video-pipeline/shared";
 
-export function VariantPlayer({ playback }: { playback: VariantPlayback[] }) {
+export function VariantPlayer({
+  playback,
+  emptyAction,
+}: {
+  playback: VariantPlayback[];
+  /** The control the empty state names. Without it the panel says "run a render
+   *  pass" and offers no way to do it. */
+  emptyAction?: ReactNode;
+}) {
   if (playback.length === 0) {
     return (
       <Card>
@@ -17,6 +26,7 @@ export function VariantPlayer({ playback }: { playback: VariantPlayback[] }) {
             icon={Video}
             title="No rendered variants yet"
             description="Run a render pass to produce MP4s under renders/<job-id>/."
+            action={emptyAction}
           />
         </CardContent>
       </Card>

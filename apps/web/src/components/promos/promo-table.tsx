@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+import { FetchingState } from "@/components/ui/fetching-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { usePromos } from "@/lib/queries";
@@ -30,11 +30,20 @@ export function PromoTable() {
     <Card>
       <CardContent className="p-0">
         {isLoading ? (
-          <div className="space-y-3 p-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full" />
-            ))}
-          </div>
+          // Four unlabelled grey bars said nothing about what was happening or
+          // where the data comes from. The wait itself is now ~1s (the API fetches
+          // every storyboard + manifest concurrently instead of two blocking B2
+          // GETs per row), but on a big bucket it is still a wait, so it says so.
+          <FetchingState
+            className="p-4"
+            label={
+              <>
+                Reading every{" "}
+                <code className="font-mono">storyboards/&lt;id&gt;.json</code> and
+                its manifest from B2...
+              </>
+            }
+          />
         ) : error ? (
           <ErrorState error={error} onRetry={() => refetch()} />
         ) : promos.length === 0 ? (
@@ -49,7 +58,8 @@ export function PromoTable() {
             }
           />
         ) : (
-          <Table>
+          <>
+            <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead className="w-[92px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -142,7 +152,15 @@ export function PromoTable() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+            {/* The count the loading state promised, so "is that everything?" has
+                an answer on screen rather than requiring a row count by eye. */}
+            <p className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+              {promos.length.toLocaleString("en-US")}{" "}
+              {promos.length === 1 ? "promo" : "promos"} in{" "}
+              <code className="font-mono">storyboards/</code>, newest first.
+            </p>
+          </>
         )}
       </CardContent>
     </Card>

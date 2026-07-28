@@ -1,6 +1,15 @@
 import { AssetLibrary } from "@/components/library/asset-library";
 
-export default function LibraryPage() {
+// `?product=<slug>` scopes the view on arrival: `/ingest` links here carrying the
+// product whose material was just uploaded, rather than dropping the user on
+// whichever product happens to sort first.
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ product?: string | string[] }>;
+}) {
+  const { product } = await searchParams;
+
   return (
     <div className="space-y-8">
       <div className="animate-fade-in border-b border-border pb-5">
@@ -12,7 +21,7 @@ export default function LibraryPage() {
         </p>
       </div>
       <div className="animate-fade-in-up stagger-2">
-        <AssetLibrary />
+        <AssetLibrary productParam={product} />
       </div>
     </div>
   );

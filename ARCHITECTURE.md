@@ -16,7 +16,11 @@
 - **packages/remotion/** — the Remotion composition, 10 shot cards, and the
   `render-frames.mjs` CLI the backend spawns
 - **packages/shared/** — TypeScript types **plus** the shot-card, storyboard-preset
-  and variant JSON read by both the renderer and the API
+  and variant JSON read by both the renderer and the API. `variant-geometry.ts` is
+  the single TypeScript aspect-ratio -> pixels derivation over `variants.json`,
+  imported by `packages/remotion` *and* `apps/web` (mirrored in
+  `services/api/app/types/variants.py`) so no surface can label a variant with a
+  size the pass will not render
 
 ## Backend Layering
 
@@ -57,19 +61,23 @@ services/api/
     repo/
       b2_client.py         Cached boto3 client, listing cache, health TTL cache
       b2_frames.py         Threaded bulk frame put/fetch, resume scan, prefix delete
-      b2_json.py           put_json / get_json for storyboards + manifests
+      b2_json.py           put_json / get_json / get_json_many for storyboards + manifests
       b2_media.py          Presigned URLs (inline + attachment), raw byte writes
       b2_object.py         Single-object body reads
       b2_stats.py          Bucket-wide aggregates
       counter.py           Download counter persistence
     service/
       promos.py            Promo CRUD (writes)
-      promo_views.py       Read-side projections: list, detail, stats, pass volume
+      promo_views.py       Read-side projections: list, detail, stats, pass volume.
+                           Every list-shaped view batches its per-promo document
+                           reads through repo.get_json_many (one concurrent hop,
+                           not two blocking B2 GETs per row)
       render_pass.py       One pass: resume -> render -> upload -> encode -> manifest
       render_payload.py    The document handed to Node (capture keys -> presigned URLs)
       render_engine.py     Spawns render-frames.mjs, parses its NDJSON stream
-      encode.py            ffmpeg mux + poster, three-step ffmpeg resolution
+      encode.py            ffmpeg mux + poster + SFX mix, ffmpeg resolution
       audio.py             Locally synthesized WAV bed + SFX (stdlib `wave`)
+      audio_mix.py         Per-shot SFX -> beat-aligned cues on the pass bed
       capture.py           Playwright captures, Pillow placeholder fallback
       assets.py            Scoped assets/<product>/ listing
       jobs.py              Single-worker pass runner + progress registry
@@ -165,7 +173,12 @@ See [docs/SECURITY.md](docs/SECURITY.md) for the full picture.
   `encode_variant` (ffmpeg) -> `extract_poster` -> `upload_bytes` for the MP4 and
   poster -> append a `RenderPass` and `put_json` the manifest
 - **Progress**: Browser polls `GET /promos/{id}/progress` (every 1.5s while
-  rendering, stops otherwise) -> in-process registry, falling back to the manifest
+  rendering, stops otherwise) -> in-process registry, falling back to the manifest.
+  `GET /promos` and `GET /promos/{id}` overlay the same registry
+  (`service/jobs.rendering_job_ids()`) so a running pass reports `rendering`
+  before the manifest gains its entry; `/promos` polls at 5s while any row is
+  in flight. During the upload leg `rendered`/`total` count uploaded objects, so
+  the bar and counter keep moving after rasterizing ends.
 - **Playback**: Browser -> `GET /promos/{id}` -> presigned inline URLs per variant
   + poster + a sampled frame strip read straight out of `frames/…`
 - **Edit**: Browser -> `PATCH /promos/{id}` -> re-snap to the beat grid -> bump

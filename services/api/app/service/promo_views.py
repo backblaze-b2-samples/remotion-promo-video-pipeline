@@ -10,11 +10,12 @@ import logging
 from datetime import datetime
 
 from app.repo import (
-    get_json,
+    get_json_many,
     get_presigned_inline_url,
     list_frame_numbers,
     list_keys,
 )
+from app.service.jobs import rendering_job_ids
 from app.service.promos import get_manifest, get_storyboard
 from app.types.formatting import humanize_bytes
 from app.types.keys import (
@@ -23,12 +24,15 @@ from app.types.keys import (
     frame_key,
     frame_prefix,
     job_id_from_storyboard_key,
+    manifest_key,
+    storyboard_key,
 )
 from app.types.promo import (
     DeliveryManifest,
     PassVolumePoint,
     PipelineStats,
     PromoDetail,
+    PromoStatus,
     PromoSummary,
     Storyboard,
     VariantPlayback,
@@ -41,25 +45,63 @@ logger = logging.getLogger(__name__)
 FRAME_SAMPLE_COUNT = 6
 
 
+def _status(job_id: str, has_passes: bool, in_flight: set[str]) -> PromoStatus:
+    """The promo's status, in-flight state first.
+
+    The manifest only gains an entry when a pass *finishes*, so manifest-only
+    derivation reported a promo mid-pass as "Rendered" (or "Draft" on its first
+    pass) and the UI's `rendering` badge / disabled render button never engaged.
+    """
+    if job_id in in_flight:
+        return "rendering"
+    return "rendered" if has_passes else "draft"
+
+
 def list_promos() -> list[PromoSummary]:
-    """Every promo, newest first. One listing plus one GET per job."""
+    """Every promo, newest first. One listing, then all documents in parallel.
+
+    Both key sets are known from the listing alone (`storyboards/<id>.json` ->
+    `manifests/<id>.json`), so storyboards AND manifests go out in ONE batched,
+    concurrent fetch. Walking them one promo at a time was two blocking B2 GETs
+    per row — 17 promos meant 34 sequential round trips and a ~7s response, which
+    is why the list showed nothing but skeletons on every visit.
+    """
+    in_flight = rendering_job_ids()
+    job_ids = [
+        job_id
+        for job_id in (
+            job_id_from_storyboard_key(row["Key"]) for row in list_keys(STORYBOARDS_ROOT)
+        )
+        if job_id
+    ]
+    documents = get_json_many(
+        [storyboard_key(job_id) for job_id in job_ids]
+        + [manifest_key(job_id) for job_id in job_ids]
+    )
+
     summaries: list[PromoSummary] = []
-    for row in list_keys(STORYBOARDS_ROOT):
-        job_id = job_id_from_storyboard_key(row["Key"])
-        if not job_id:
-            continue
-        document = get_json(row["Key"])
+    for job_id in job_ids:
+        document = documents.get(storyboard_key(job_id))
         if document is None:
             continue
-        storyboard = Storyboard.model_validate(document)
-        manifest = get_manifest(job_id)
-        summaries.append(_summarize(storyboard, manifest))
+        manifest_document = documents.get(manifest_key(job_id))
+        summaries.append(
+            _summarize(
+                Storyboard.model_validate(document),
+                DeliveryManifest.model_validate(manifest_document)
+                if manifest_document
+                else None,
+                in_flight,
+            )
+        )
     summaries.sort(key=lambda s: s.updated_at, reverse=True)
     return summaries
 
 
 def _summarize(
-    storyboard: Storyboard, manifest: DeliveryManifest | None
+    storyboard: Storyboard,
+    manifest: DeliveryManifest | None,
+    in_flight: set[str] | None = None,
 ) -> PromoSummary:
     passes = manifest.passes if manifest else []
     poster_url = None
@@ -77,7 +119,7 @@ def _summarize(
         preset=storyboard.preset,
         revision=storyboard.revision,
         updated_at=storyboard.updated_at,
-        status="rendered" if passes else "draft",
+        status=_status(storyboard.job_id, bool(passes), in_flight or set()),
         duration_frames=storyboard.duration_frames,
         fps=storyboard.fps,
         bpm=storyboard.bpm,
@@ -123,12 +165,13 @@ def get_pass_volume(limit: int = 8) -> list[PassVolumePoint]:
 
 
 def _all_manifests() -> list[DeliveryManifest]:
-    out: list[DeliveryManifest] = []
-    for row in list_keys(MANIFESTS_ROOT):
-        document = get_json(row["Key"])
-        if document:
-            out.append(DeliveryManifest.model_validate(document))
-    return out
+    """Every delivery manifest, fetched concurrently (same cost story as above)."""
+    documents = get_json_many([row["Key"] for row in list_keys(MANIFESTS_ROOT)])
+    return [
+        DeliveryManifest.model_validate(document)
+        for document in documents.values()
+        if document
+    ]
 
 
 def get_promo_detail(job_id: str) -> PromoDetail:
@@ -167,7 +210,7 @@ def get_promo_detail(job_id: str) -> PromoDetail:
         manifest=manifest,
         playback=playback,
         frame_samples=_frame_samples(storyboard, last.pass_number if last else 0),
-        status="rendered" if passes else "draft",
+        status=_status(job_id, bool(passes), rendering_job_ids()),
     )
 
 

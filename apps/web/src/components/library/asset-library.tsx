@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { FolderOpen, Music } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,42 +21,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { FetchingState } from "@/components/ui/fetching-state";
+import { AssetGroupCard } from "@/components/library/asset-group-card";
+import { groupAssetsByKind, isProductEmpty } from "@/lib/asset-groups";
+import { normalizeProductParam } from "@/lib/product-slug";
 import { useAssetLibrary, useCreateDemoAudio, useProducts } from "@/lib/queries";
-import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
-import type { AssetEntry } from "@remotion-promo-video-pipeline/shared";
 
-const KIND_LABELS: Record<AssetEntry["kind"], string> = {
-  capture: "Captures",
-  bgm: "Audio bed",
-  sfx: "SFX one-shots",
-  brand: "Brand files",
-  other: "Other",
-};
-
-const KIND_ORDER: AssetEntry["kind"][] = ["capture", "bgm", "sfx", "brand", "other"];
-
-export function AssetLibrary() {
+/**
+ * @param productParam `?product=` from the URL — how `/ingest` hands over the
+ *   product a user just ingested under. Honoured only when the bucket actually
+ *   has that product, because the picker below is a `Select` over a fixed list.
+ */
+export function AssetLibrary({ productParam }: { productParam?: string | string[] }) {
   const { data: products, isLoading: productsLoading } = useProducts();
 
   // The picker only mounts once the product list has loaded, so the initial
   // selection is a real `useState` initial value rather than an effect syncing
   // server data into state after first paint.
   if (productsLoading || !products) {
+    // This is the slow half of the wait: the product list is derived by listing
+    // two B2 prefixes, and nothing product-scoped can be fetched until it lands.
+    // Unlabelled grey bars for several seconds said none of that.
     return (
-      <div className="space-y-4">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-32 w-full" />
-        ))}
-      </div>
+      <FetchingState
+        rows={3}
+        rowClassName="h-32 w-full"
+        label={
+          <>
+            Listing <code className="font-mono">assets/</code> and{" "}
+            <code className="font-mono">storyboards/</code> in B2 to find which
+            products exist — the product list has to resolve before its assets can
+            load...
+          </>
+        }
+      />
     );
   }
+
+  const requested = normalizeProductParam(productParam);
+  const initialProduct =
+    requested && products.products.includes(requested)
+      ? requested
+      : (products.products[0] ?? products.default);
 
   return (
     <AssetLibraryReady
       products={products.products}
-      initialProduct={products.products[0] ?? products.default}
+      initialProduct={initialProduct}
       fallbackProduct={products.default}
     />
   );
@@ -77,10 +87,9 @@ function AssetLibraryReady({
   const audio = useCreateDemoAudio();
   const { data: library, isLoading, error, refetch } = useAssetLibrary(product);
 
-  const grouped = KIND_ORDER.map((kind) => ({
-    kind,
-    entries: (library?.entries ?? []).filter((entry) => entry.kind === kind),
-  })).filter((group) => group.entries.length > 0);
+  // Every kind, including the empty ones — a product with only brand files still
+  // has to show that captures, a bed and SFX exist and how to add them.
+  const grouped = groupAssetsByKind(library?.entries);
 
   return (
     <div className="space-y-6">
@@ -143,18 +152,25 @@ function AssetLibraryReady({
       </Card>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
-          ))}
-        </div>
+        <FetchingState
+          rows={3}
+          rowClassName="h-32 w-full"
+          label={
+            <>
+              Listing <code className="font-mono">assets/{product}/</code> in B2 —
+              captures, brand files, the audio bed and SFX...
+            </>
+          }
+        />
       ) : error ? (
         <Card>
           <CardContent className="p-0">
             <ErrorState error={error} onRetry={() => refetch()} />
           </CardContent>
         </Card>
-      ) : grouped.length === 0 ? (
+      ) : isProductEmpty(grouped) ? (
+        // Nothing of ANY kind: one whole-product empty state rather than five
+        // identical empty cards.
         <Card>
           <CardContent className="p-0">
             <EmptyState
@@ -165,65 +181,7 @@ function AssetLibraryReady({
           </CardContent>
         </Card>
       ) : (
-        grouped.map((group) => (
-          <Card key={group.kind}>
-            <CardHeader className="border-b border-border py-4 px-5">
-              <CardTitle className="card-title">{KIND_LABELS[group.kind]}</CardTitle>
-              <CardDescription className="text-xs">
-                {group.entries.length} objects
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-5">
-              {group.kind === "capture" ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {group.entries.map((entry) => (
-                    <figure key={entry.key} className="space-y-2">
-                      <div className="relative aspect-video overflow-hidden rounded border border-border bg-muted">
-                        {entry.url ? (
-                          // Presigned, short-lived: skip Next's optimizer cache.
-                          <Image
-                            src={entry.url}
-                            alt={entry.name}
-                            fill
-                            unoptimized
-                            sizes="(min-width: 1024px) 320px, 50vw"
-                            className="object-cover"
-                          />
-                        ) : null}
-                      </div>
-                      <figcaption className="space-y-1 text-[11px] text-muted-foreground">
-                        <Badge variant="outline" className="text-[10px]">
-                          {entry.group}
-                        </Badge>{" "}
-                        {entry.name} · {entry.size_human}
-                        <div className="truncate font-mono">{entry.key}</div>
-                      </figcaption>
-                    </figure>
-                  ))}
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {group.entries.map((entry) => (
-                    <li key={entry.key} className="space-y-1">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                        <span className="font-medium">{entry.name}</span>
-                        <span className="text-[11px] text-muted-foreground">
-                          {entry.size_human} · {formatDate(entry.updated_at)}
-                        </span>
-                      </div>
-                      {entry.url && entry.content_type.startsWith("audio/") ? (
-                        <audio controls preload="none" src={entry.url} className="w-full" />
-                      ) : null}
-                      <div className="truncate font-mono text-[11px] text-muted-foreground">
-                        {entry.key}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        ))
+        grouped.map((group) => <AssetGroupCard key={group.kind} group={group} />)
       )}
     </div>
   );

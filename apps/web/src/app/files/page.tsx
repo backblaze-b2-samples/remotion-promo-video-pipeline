@@ -11,7 +11,11 @@ export default function FilesPage() {
         <div className="min-w-0">
           <h1 className="page-title">Files</h1>
           <p className="mt-1.5 max-w-prose text-sm text-muted-foreground">
-            Browse and manage everything in your bucket.
+            Whole-bucket forensics, unscoped. The tree lists the newest objects
+            first and says how many of the bucket&apos;s total it is showing — scope
+            to a prefix (e.g.{" "}
+            <code className="font-mono text-xs">frames/&lt;job-id&gt;/pass-01/</code>)
+            to walk down to individual render frames.
           </p>
         </div>
         <Button asChild size="sm" className="h-8 shrink-0">

@@ -13,6 +13,11 @@ from pydantic import BaseModel, Field, computed_field
 
 PromoStatus = Literal["draft", "rendering", "rendered", "failed"]
 RenderPhase = Literal[
+    # "idle" is NOT "queued": a promo that has never been rendered has nothing
+    # scheduled, and reporting "Queued" made first-time users wait for a pass
+    # that would never start. "queued" means a pass really is waiting on the
+    # single render worker.
+    "idle",
     "queued",
     "resuming",
     "rendering",
@@ -59,6 +64,14 @@ class Storyboard(BaseModel):
     accent: str = "ink-amber"
     variants: list[str]
     shots: list[Shot]
+    # How the capture wired into this promo's shots was actually produced, and
+    # why if it degraded. Recorded on the job record (not just returned once from
+    # POST /promos) so the promo detail page can keep telling the truth about a
+    # promo built from synthetic placeholder cards instead of the product UI.
+    # Defaults are empty, not "playwright": a storyboard written before this field
+    # existed is *unknown*, and claiming a real capture would be the same lie.
+    capture_engine: str = ""
+    capture_note: str = ""
 
     @computed_field  # serialized, so the UI never re-derives the total itself
     @property

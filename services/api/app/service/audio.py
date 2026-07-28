@@ -209,6 +209,31 @@ def ensure_audio_bed(
     return local_path, key
 
 
+def ensure_local_sfx(product: str, sfx_id: str, out_dir: Path) -> Path | None:
+    """Local WAV for one SFX id, synthesizing + uploading it if B2 lacks it.
+
+    Returns None for an unknown id (including `"none"`), so a storyboard row the
+    library no longer offers degrades to "no cue" instead of failing the pass.
+    """
+    recipe = SFX_RECIPES.get(sfx_id)
+    if recipe is None:
+        return None
+    path = out_dir / f"sfx-{sfx_id}.wav"
+    if path.exists():
+        return path
+
+    key = sfx_key(product, recipe[0], sfx_id)
+    if [row for row in list_keys(key) if row["Key"] == key]:
+        data = get_object_bytes(key)
+    else:
+        data = synthesize_sfx(recipe)
+        upload_bytes(data, key, "audio/wav")
+        logger.info("Synthesized SFX: key=%s bytes=%d", key, len(data))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return path
+
+
 def ensure_sfx_pack(product: str) -> list[dict]:
     """Synthesize and upload the three SFX one-shots. Idempotent.
 

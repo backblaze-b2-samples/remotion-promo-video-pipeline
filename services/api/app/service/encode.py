@@ -82,16 +82,24 @@ def encode_variant(
     fps: int,
     audio_path: Path | None = None,
     muted: bool = False,
+    total_frames: int | None = None,
 ) -> int:
     """Mux the PNG sequence (+ audio bed) into an MP4. Returns bytes written.
 
     Muted variants (the autoplaying hero loop) are encoded with `-an` rather
     than a silent track: no audio stream at all is what browsers want for
     `autoplay`.
+
+    `total_frames` is the pass's frame count. Passing it makes the output
+    duration EXACT — see the comment on the audio arguments below, and
+    `tests/test_encode_duration.py`.
     """
     ffmpeg = resolve_ffmpeg()
     use_audio = audio_path is not None and not muted and audio_path.exists()
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    visual_seconds = (
+        total_frames / max(1, fps) if total_frames and total_frames > 0 else None
+    )
 
     args = [
         ffmpeg,
@@ -120,17 +128,38 @@ def encode_variant(
         "-movflags",
         "+faststart",
     ]
-    # Output duration must equal the *visual* duration, whatever the bed's length:
-    #   -shortest  trims a longer bed instead of padding the MP4 with a still frame
-    #   -af apad   pads a shorter bed with silence, so audio can never end the
-    #              output early (which silently truncated the video before)
-    # `service/audio.py` already picks a bed long enough; apad is the belt to that
-    # braces, and it covers a user-uploaded MP3 whose length cannot be probed.
-    args += (
-        ["-af", "apad", "-c:a", "aac", "-b:a", "128k", "-shortest"]
-        if use_audio
-        else ["-an"]
-    )
+    # Output duration must equal the *visual* duration, whatever the bed's length.
+    #
+    # `-af apad` (unbounded) + `-shortest` is NOT enough and shipped a real bug:
+    # bare `apad` pads audio *indefinitely*, and `-shortest` is then bounded by
+    # ffmpeg's sync-queue buffer (`-shortest_buf_duration`, default 10s), so a
+    # 6.00s / 180-frame pass with a 6.5s synthesized bed muxed to a **10.84s**
+    # container — ~4.8s of frozen outro frame plus silence in the artifact a user
+    # posts. Reproduced on ffmpeg 7.1; see tests/test_encode_duration.py.
+    #
+    # The fix is to make the target length explicit instead of implied:
+    #   -af apad=whole_dur=D  pads a SHORT bed with silence up to exactly D (so a
+    #                         bed that cannot be probed can never end the output
+    #                         early) and never pads past it
+    #   -t D                  hard-caps the output, so a LONGER bed is trimmed
+    #                         deterministically rather than via `-shortest`
+    # `-shortest` stays as the fallback when the frame count is unknown.
+    if not use_audio:
+        args += ["-an"]
+    elif visual_seconds is None:
+        args += ["-af", "apad", "-c:a", "aac", "-b:a", "128k", "-shortest"]
+    else:
+        args += [
+            "-af",
+            f"apad=whole_dur={visual_seconds:.6f}",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-shortest",
+            "-t",
+            f"{visual_seconds:.6f}",
+        ]
     args += [str(out_path)]
 
     _run(args, ENCODE_TIMEOUT_SECONDS, "ffmpeg encode")
@@ -139,6 +168,60 @@ def encode_variant(
         "Encoded variant: out=%s bytes=%d audio=%s", out_path.name, size, use_audio
     )
     return size
+
+
+def mix_audio_cues(
+    bed_path: Path,
+    cues: list[tuple[float, Path]],
+    out_path: Path,
+    duration_seconds: float,
+) -> Path:
+    """Overlay one-shot SFX onto the bed at fixed offsets. Returns `out_path`.
+
+    Emitted as PCM WAV, so the result is just another bed as far as
+    `encode_variant` is concerned and it is built once per pass rather than once
+    per variant. Two filter details are load-bearing:
+
+    * `adelay=...:all=1` delays every channel, so a cue does not drift between
+      the left and right channels of the stereo bed.
+    * `amix=normalize=0` keeps the bed at its authored level. The default
+      (`normalize=1`) divides every input by the input count, so adding one
+      one-shot would audibly duck the whole bed.
+
+    A cue whose offset is past the end of the pass is dropped by the caller;
+    `duration=first` plus `-t` keeps the mix exactly as long as the bed.
+    """
+    if not cues:
+        return bed_path
+    ffmpeg = resolve_ffmpeg()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    args = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(bed_path)]
+    for _offset, cue_path in cues:
+        args += ["-i", str(cue_path)]
+
+    chains = [
+        f"[{index}:a]adelay=delays={round(offset * 1000)}:all=1[cue{index}]"
+        for index, (offset, _path) in enumerate(cues, start=1)
+    ]
+    labels = "".join(f"[cue{index}]" for index in range(1, len(cues) + 1))
+    graph = ";".join(
+        [*chains, f"[0:a]{labels}amix=inputs={len(cues) + 1}:normalize=0:duration=first[mix]"]
+    )
+    args += [
+        "-filter_complex",
+        graph,
+        "-map",
+        "[mix]",
+        "-c:a",
+        "pcm_s16le",
+        "-t",
+        f"{max(0.0, duration_seconds):.6f}",
+        str(out_path),
+    ]
+    _run(args, POSTER_TIMEOUT_SECONDS, "ffmpeg audio mix")
+    logger.info("Mixed SFX into the bed: cues=%d out=%s", len(cues), out_path.name)
+    return out_path
 
 
 def extract_poster(frame_path: Path, out_path: Path) -> int:

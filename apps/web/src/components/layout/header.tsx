@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Moon, Sun, Search } from "lucide-react";
@@ -47,10 +47,31 @@ function deriveTitleFromPath(pathname: string): string {
     .join(" ");
 }
 
+/**
+ * Linkable ancestors of `pathname`, nearest-root first.
+ *
+ * Nested routes used to render a two-crumb trail straight to the dashboard, so
+ * `/promos/<id>` offered no way back to the promo list — on a deleted or
+ * bookmarked id, where the content area is an error state, that left the sidebar
+ * as the only escape. Only ancestors the app really has a page for become links.
+ */
+function ancestorCrumbs(pathname: string): { href: string; label: string }[] {
+  const segments = pathname.split("/").filter(Boolean);
+  const crumbs: { href: string; label: string }[] = [];
+  let href = "";
+  for (const segment of segments.slice(0, -1)) {
+    href += `/${segment}`;
+    const label = pageTitles[href];
+    if (label) crumbs.push({ href, label });
+  }
+  return crumbs;
+}
+
 export function Header() {
   const pathname = usePathname();
   const { resolvedTheme, setTheme } = useTheme();
   const pageTitle = pageTitles[pathname] ?? deriveTitleFromPath(pathname);
+  const ancestors = ancestorCrumbs(pathname);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
 
@@ -84,6 +105,21 @@ export function Header() {
               {APP_NAME}
             </BreadcrumbLink>
           </BreadcrumbItem>
+          {ancestors.map((crumb) => (
+            <Fragment key={crumb.href}>
+              <BreadcrumbSeparator className="text-nav-foreground/40">
+                /
+              </BreadcrumbSeparator>
+              <BreadcrumbItem>
+                <BreadcrumbLink
+                  href={crumb.href}
+                  className="text-nav-foreground/80 hover:text-nav-foreground font-medium"
+                >
+                  {crumb.label}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+            </Fragment>
+          ))}
           {pathname !== "/" && (
             <>
               <BreadcrumbSeparator className="text-nav-foreground/40">

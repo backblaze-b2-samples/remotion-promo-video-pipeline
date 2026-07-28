@@ -33,8 +33,10 @@ bucket and must never be removed or scoped.
 - B2 data access pattern: `services/api/app/repo/b2_client.py`
 
 ## Inputs
-- prefix: string (optional filter for file listing)
-- limit: int (max files to return, 1-1000, default 100)
+- prefix: string (optional filter for file listing; the `/files` page exposes it as
+  a "Scope to a prefix" input, which is the only way to reach deep keys — see Flow)
+- limit: int (max files to return, 1-1000; API default 100, the browser requests
+  `FILE_PAGE_SIZE` = 500 and offers 1,000)
 - key: string (file key for get/download/delete — sent as a query parameter by the web client; no path traversal)
 
 ## Outputs
@@ -49,6 +51,25 @@ bucket and must never be removed or scoped.
 
 ## Flow
 - Page loads → fetches file list from `GET /files` (sorted most recent first)
+- **Truncation is disclosed, never silent.** `GET /files` sorts the whole prefix
+  newest-first and *then* slices to `limit`, so `limit` genuinely hides the tail.
+  The header therefore states "Showing N of M objects in the bucket" (M from
+  `GET /files/stats`) and warns when the page is full. With 13,168 objects in a
+  bucket, an unscoped view at the old default of 100 showed `frames 96 files` and
+  no `assets/` or `storyboards/` prefix at all, while the dashboard next door
+  reported 5,220 frames archived — with nothing on screen to reconcile the two
+- **No counts are claimed until they are known.** A full-bucket scan takes ~9s,
+  and rendering `files.length` unguarded asserted "Showing **0 of 0** objects in
+  the bucket" for that whole window — a false *terminal* fact for the exact user
+  who came here to check whether their frames landed in B2. While the listing is
+  in flight the header shows a skeleton plus a visible "Counting objects in the
+  bucket..." (the dashboard tiles' treatment), and the "of M" clause appears only
+  once `/files/stats` has answered — "500 of 500" would understate the bucket just
+  as badly
+- **Scope to a prefix to go deep.** No page size reaches
+  `frames/<job-id>/pass-NN/<variant>/` in a busy bucket; scoping the listing to that
+  prefix puts one pass comfortably inside the cap. A "Show up to 1,000 objects"
+  control raises the page size to the API's own ceiling
 - Files organized into tree view — folders expand/collapse, files shown with type-specific icons
 - Top-level folders auto-expand on load
 - User hovers or focuses a file row → action menu appears (preview / download / delete); touch-sized menu button remains visible on small screens
@@ -64,11 +85,16 @@ bucket and must never be removed or scoped.
 - File key contains `/`, spaces, `#`, `?`, `%`, reserved route names, or suffixes like `/download` and `/preview` → web client sends the key as a query parameter before calling get/download/preview/delete routes
 - B2 unreachable → persistent error state with retry
 - Empty bucket → prompt with a direct **Ingest assets** action
+- Prefix matches nothing → "Nothing under `<prefix>`" with a **Clear prefix**
+  action, not the misleading "This bucket is empty"
+- More objects than the page size → the count line says so and names prefix
+  scoping as the way to reach the rest
 - Delete failure → API returns 500, toast error
 
 ## UX States
 - Empty: centered message with an **Ingest assets** action
-- Loading: skeleton rows
+- Loading: skeleton rows, and a skeleton + "Counting objects in the bucket..." in
+  place of the count line — never a "0 of 0" that reads as a settled answer
 - Error: inline error state with Retry
 - Loaded: tree view with expand/collapse folders and focus/hover action menus
 - Preview: responsive dialog with wrapped file names, fallback copy for preview URL failures, and metadata that tolerates long keys; a "Detailed metadata" disclosure lazily loads checksums/EXIF/PDF fields (skeleton while loading, inline error if the recompute fails)

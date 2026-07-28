@@ -12,7 +12,7 @@ from app.repo.b2_frames import (
     list_keys,
     put_frames,
 )
-from app.repo.b2_json import get_json, put_json
+from app.repo.b2_json import get_json, get_json_many, put_json
 from app.repo.b2_media import (
     get_presigned_inline_url,
     get_presigned_url,
@@ -30,6 +30,7 @@ __all__ = [
     "get_download_count",
     "get_file_metadata",
     "get_json",
+    "get_json_many",
     "get_object_bytes",
     "get_presigned_inline_url",
     "get_presigned_url",

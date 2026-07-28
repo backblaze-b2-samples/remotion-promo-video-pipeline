@@ -47,7 +47,12 @@ measurable rather than thrown away.
 3. Per variant, in storyboard order (master first):
    - **resume scan**: `list_frame_numbers(prefix)` -> `{frame: size}` already in B2
    - render only `min(missing)..max(missing)` via Remotion's `frameRange`
-   - upload the newly rendered frames, threaded, invalidating the listing cache once
+   - upload the newly rendered frames, threaded, invalidating the listing cache once.
+     `put_frames(on_uploaded=...)` fires as each object lands and `rendered`/`total`
+     are re-pointed at the upload leg for its duration, so the bar and counter keep
+     moving. They used to freeze at "180 / 180" with a completely full bar for the
+     majority of the wall clock — minutes on the `full` preset — which reads as
+     "done but stuck"
    - re-list the prefix for authoritative frame count + byte totals
    - download any frame the current attempt did not render locally, so the encode
      sees a complete sequence
@@ -69,16 +74,28 @@ measurable rather than thrown away.
 - `RENDER_CONCURRENCY=auto` on a 1-core host -> resolves to 1, never 0
 
 ## UX States (if applicable)
-- Empty: "No render yet"
-- Loading: phase label + real frames-rendered/total + a `Progress` bar, `aria-live`
+- Empty: phase **Not started** (`idle`) + "No render yet", bar at 0%. `idle` is a
+  distinct phase from `queued` on purpose: "Queued" claimed a pass was waiting on
+  the worker when nothing had been scheduled
+- Loading: phase label + frames-rendered/total (uploaded/to-upload during the
+  upload leg) + a `Progress` bar weighted across **all** legs of **all** variants
+  (`lib/amplification.passPercent`), `aria-live`
+- In flight, elsewhere: `GET /promos` and `GET /promos/{id}` report `rendering`
+  from the job registry, so the list badge, the header badge and the disabled
+  "Render in flight" button engage; `/promos` polls at 5s while any row is running
 - Error: **Failed** phase with the error text inline; the traceback stays in the log
 
 ## Verification
 - Test files: `services/api/tests/test_promo_routes.py` (202 + `Location`, 409,
   failure surfacing), `services/api/tests/test_binary_resolution.py` (actionable
-  binary errors), `apps/web/src/lib/amplification.test.ts` (`renderPercent`)
+  binary errors), `services/api/tests/test_promo_status.py` (in-flight status,
+  `idle` vs `queued`), `apps/web/src/lib/amplification.test.ts` (`renderPercent`,
+  `passPercent`)
 - Required cases: 202 + progress location; 404 for an unknown promo; a failing pass
-  reports `status: failed` with the message; missing binaries are actionable
+  reports `status: failed` with the message; missing binaries are actionable; a
+  running pass reports `rendering` in both the list and the detail before the
+  manifest has an entry; a never-rendered promo reports `idle`; the bar never
+  reaches 100% before the pass is done and advances through the upload leg
 - Focused verify command: `cd services/api && .venv/bin/python -m pytest tests/test_promo_routes.py -q`
 - Default pre-PR verify command: `pnpm verify`
 - Full local verify command: `pnpm verify:full` when E2E/live prerequisites apply

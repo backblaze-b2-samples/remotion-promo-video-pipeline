@@ -6,92 +6,13 @@ whole suite runs with no credentials, no network, no ffmpeg and no render.
 
 import pytest
 
-from app.service import assets as assets_service
-from app.service import capture as capture_service
-from app.service import jobs, promo_views, promos
+from app.service import jobs
 from app.types.keys import manifest_key, storyboard_key
 
-
-class FakeBucket:
-    """Minimal key -> JSON document store standing in for B2."""
-
-    def __init__(self):
-        self.documents: dict[str, dict] = {}
-        self.deleted: list[str] = []
-
-    def put_json(self, key: str, document: dict) -> int:
-        self.documents[key] = document
-        return len(str(document))
-
-    def get_json(self, key: str) -> dict | None:
-        return self.documents.get(key)
-
-    def list_keys(self, prefix: str) -> list[dict]:
-        return [
-            {"Key": key, "Size": 1, "LastModified": None}
-            for key in sorted(self.documents)
-            if key.startswith(prefix)
-        ]
-
-    def delete_prefix(self, prefix: str) -> int:
-        matched = [key for key in self.documents if key.startswith(prefix)]
-        for key in matched:
-            del self.documents[key]
-        self.deleted.extend(matched)
-        return len(matched)
-
-    def delete_file(self, key: str) -> None:
-        self.documents.pop(key, None)
-        self.deleted.append(key)
-
-
-@pytest.fixture
-def bucket(monkeypatch):
-    store = FakeBucket()
-    monkeypatch.setattr(promos, "put_json", store.put_json)
-    monkeypatch.setattr(promos, "get_json", store.get_json)
-    monkeypatch.setattr(promos, "delete_prefix", store.delete_prefix)
-    monkeypatch.setattr(promos, "delete_file", store.delete_file)
-    monkeypatch.setattr(promo_views, "get_json", store.get_json)
-    monkeypatch.setattr(promo_views, "list_keys", store.list_keys)
-    monkeypatch.setattr(promo_views, "list_frame_numbers", lambda prefix: {})
-    monkeypatch.setattr(
-        promo_views, "get_presigned_inline_url", lambda key, *a, **k: f"https://signed/{key}"
-    )
-    # Capture is exercised in its own test; here it must not launch a browser.
-    monkeypatch.setattr(
-        capture_service,
-        "capture_product",
-        lambda product, **kwargs: {
-            "product": product,
-            "url": kwargs.get("url", ""),
-            "engine": "placeholder",
-            "note": "test",
-            "captures": [],
-        },
-    )
-    monkeypatch.setattr(
-        assets_service,
-        "capture_keys_by_viewport",
-        lambda product: {"desktop": f"assets/{product}/captures/desktop/product@2x.png"},
-    )
-    jobs._reset_state()
-    yield store
-    jobs._reset_state()
-
-
-CREATE_BODY = {
-    "product": "demo-product",
-    "title": "Ship faster with demo-product",
-    "preset": "release-teaser",
-    "bpm": 120,
-    "width": 1280,
-    "height": 720,
-    "accent": "ink-amber",
-    "variants": ["master-16x9", "vertical-9x16"],
-    "capture_url": "http://localhost:3000",
-    "viewports": ["desktop"],
-}
+# `FakeBucket` and the `bucket` fixture live in conftest.py: `test_promo_status.py`
+# needs exactly the same in-memory B2 stand-in, and re-importing a fixture across
+# test modules is an F811 violation.
+from .conftest import CREATE_BODY
 
 
 async def _create(client) -> dict:

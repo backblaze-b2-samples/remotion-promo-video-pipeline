@@ -53,8 +53,17 @@ def variant_spec(variant_id: str, tier: int) -> dict:
         "height": height,
         "fit": spec["fit"],
         "muted": bool(spec["muted"]),
+        # Surfaced to the forms so an always-added variant is shown as locked-on
+        # rather than as an optional checkbox the backend overrides. See
+        # `service/promos.create_promo`, which force-adds MASTER_VARIANT.
+        "required": bool(spec.get("required", False)),
         "purpose": spec["purpose"],
     }
+
+
+def required_variant_ids() -> list[str]:
+    """Variants every storyboard gets whether or not the caller asked for them."""
+    return [v["id"] for v in variant_defs() if v.get("required")]
 
 
 def tier_from_master(width: int, height: int) -> int:

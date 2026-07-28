@@ -177,9 +177,9 @@ generated shadcn components in that directory. The "never modify" rule
 applies to the shadcn-generated files themselves, not to net-new custom
 primitives added in their own subdirectory.
 
-## Empty / error states
+## Empty / error / fetching / in-flight states
 
-Two persistent full-content states for "the data isn't there":
+Four persistent full-content states for "the data isn't (yet) there":
 
 - **`<EmptyState>`** — the underlying *data* is empty (no files in the
   bucket, no results for a query). Friendly icon + copy + optional CTA.
@@ -187,12 +187,27 @@ Two persistent full-content states for "the data isn't there":
   an `ApiError`) and `ErrorState` derives readable copy: status `0` becomes
   "Can't reach the API" with the configured base URL; `401`/`403` becomes
   "Not authorized"; `5xx` becomes "Backend error". Pair with `onRetry` to
-  let the user re-trigger the fetch.
+  let the user re-trigger the fetch — but **only when retrying can work**.
+  On a genuine `404` (a deleted or bookmarked id) drop `onRetry` and pass
+  `action` instead, with links out; a Retry that is guaranteed to fail again
+  is a dead end, not an action.
+- **`<FetchingState>`** — a *read* is still in flight and rows are coming.
+  Skeleton placeholders (`rows`, `rowClassName`) under a required `label` that
+  names the B2 keys being listed, wrapped in `role="status"`. Use it instead of a
+  bare `Skeleton` list: an unlabelled multi-second grey wait tells the user
+  nothing, and the same wait must not be explained on one list and silent on
+  another (`/promos`, `/library`).
+- **`<InFlightState>`** — a blocking request long enough that a faded button
+  is not feedback. Spinner + the stage breakdown (`children`) + a determinate
+  bar against `budgetSeconds` + a live elapsed clock. Shared so that the same
+  operation cannot look hung on one surface and healthy on another.
 
 Always prefer `ErrorState` over a stale `EmptyState` on fetch failure —
-showing "no files" when the API is unreachable is actively misleading.
+showing "no files" when the API is unreachable is actively misleading. And
+never render a count, total or "N of M" from data that has not arrived: use a
+`Skeleton` in its place, because "0 of 0" reads as a settled answer.
 
-Both live in `components/ui/` next to the shadcn primitives.
+All four live in `components/ui/` next to the shadcn primitives.
 
 ## Spacing
 

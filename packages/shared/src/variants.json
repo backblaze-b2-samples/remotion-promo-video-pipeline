@@ -1,5 +1,5 @@
 {
-  "note": "One source of truth for the delivery variants, read by both packages/remotion (src/lib/variant.ts) and the API (services/api/app/types/variants.py). Pixel dimensions are derived from the render tier (720 or 1080 short edge) so the same list serves both RENDER_PRESET values.",
+  "note": "One source of truth for the delivery variants, read by both packages/remotion (src/lib/variant.ts) and the API (services/api/app/types/variants.py). Pixel dimensions are derived from the render tier (720 or 1080 short edge) so the same list serves both RENDER_PRESET values. `required` marks a variant the backend always adds to a storyboard, so the create/edit forms can present it as locked-on instead of offering a checkbox that does nothing.",
   "variants": [
     {
       "id": "master-16x9",
@@ -8,7 +8,8 @@
       "aspect_h": 9,
       "fit": "contain",
       "muted": false,
-      "purpose": "Landing pages, YouTube, docs embeds."
+      "required": true,
+      "purpose": "Landing pages, YouTube, docs embeds. Always rendered: the poster and the frame strip both come from the master."
     },
     {
       "id": "vertical-9x16",

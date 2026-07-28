@@ -79,8 +79,15 @@ modify them. Every API call flows through TanStack Query hooks in
 three files: `runtime/<router>.py`, `lib/api-client.ts`, `lib/queries.ts`.
 
 **Form UX**: finite-option fields use a `Select` / checkbox group / `RadioGroup`,
-never free text. Create forms show safe defaults as placeholder + `FormDescription`
-only — **never an autofill button**. Edit forms open pre-filled and carry no hints.
+never free text. Create forms **open pre-filled with the server's safe defaults as
+real, editable values** and explain each one in a `FormDescription`; there is
+still **never an autofill button**. (Placeholder-only defaults were the earlier
+rule and were wrong in practice: legible grey placeholder text reads as
+pre-filled, so the natural first click was a submit that failed validation, and
+the shortest path to a first render cost three retypes of values the server had
+already sent.) A checkbox the backend overrides is not a checkbox: a variant
+marked `required` in `variants.json` renders checked + `disabled` with an
+"always included" label. Edit forms open pre-filled and carry no hints.
 
 ## 5. Quality Expectations
 

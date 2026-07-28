@@ -105,8 +105,18 @@ def build_shots(
     return shots
 
 
-def create_promo(spec: StoryboardCreate, capture_keys: dict[str, str] | None = None) -> Storyboard:
-    """Write a new storyboard at revision 1. Raises PromoValidationError."""
+def create_promo(
+    spec: StoryboardCreate,
+    capture_keys: dict[str, str] | None = None,
+    capture: dict | None = None,
+) -> Storyboard:
+    """Write a new storyboard at revision 1. Raises PromoValidationError.
+
+    `capture` is the `service/capture.capture_product()` result. Its `engine` and
+    `note` are recorded on the storyboard so a promo whose capture silently
+    degraded to a placeholder card says so on every screen that reads the job
+    record — not only in the response to the one request that created it.
+    """
     _validate_choice(spec.accent, accent_ids(), "accent")
     for variant in spec.variants:
         _validate_choice(variant, set(variant_ids()), "variant")
@@ -133,6 +143,8 @@ def create_promo(spec: StoryboardCreate, capture_keys: dict[str, str] | None = N
         height=spec.height,
         accent=spec.accent,
         variants=list(dict.fromkeys(spec.variants)),
+        capture_engine=str((capture or {}).get("engine") or ""),
+        capture_note=str((capture or {}).get("note") or ""),
         shots=build_shots(
             spec.preset,
             spec.title.strip(),
@@ -144,11 +156,12 @@ def create_promo(spec: StoryboardCreate, capture_keys: dict[str, str] | None = N
     )
     _write_storyboard(storyboard)
     logger.info(
-        "Promo created: job_id=%s product=%s preset=%s frames=%d",
+        "Promo created: job_id=%s product=%s preset=%s frames=%d capture_engine=%s",
         job_id,
         product,
         spec.preset,
         storyboard.duration_frames,
+        storyboard.capture_engine or "unknown",
     )
     return storyboard
 

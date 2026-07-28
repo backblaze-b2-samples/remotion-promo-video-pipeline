@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Image from "next/image";
 import { FileJson } from "lucide-react";
 
@@ -27,9 +28,12 @@ import type { DeliveryManifest } from "@remotion-promo-video-pipeline/shared";
 export function ManifestPanel({
   manifest,
   frameSamples,
+  emptyAction,
 }: {
   manifest: DeliveryManifest | null;
   frameSamples: string[];
+  /** The control the empty state names — see `VariantPlayer`. */
+  emptyAction?: ReactNode;
 }) {
   if (!manifest || manifest.passes.length === 0) {
     return (
@@ -39,6 +43,7 @@ export function ManifestPanel({
             icon={FileJson}
             title="No delivery manifest yet"
             description="The manifest gains one entry per completed pass — revision, shot cards, frame counts and byte totals."
+            action={emptyAction}
           />
         </CardContent>
       </Card>

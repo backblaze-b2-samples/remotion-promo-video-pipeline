@@ -28,7 +28,7 @@ from app.repo import (
     upload_bytes,
 )
 from app.service import promos
-from app.service.audio import ensure_audio_bed
+from app.service.audio_mix import pass_audio_track
 from app.service.encode import encode_variant, extract_poster, poster_frame_number
 from app.service.render_engine import render_frames
 from app.service.render_payload import local_frame_bytes, render_payload
@@ -57,6 +57,9 @@ WORK_ROOT = Path(__file__).resolve().parents[2] / "data" / "passes"
 
 Reporter = Callable[..., None]
 
+# Report upload progress every Nth object: the UI polls at 1.5s.
+UPLOAD_REPORT_EVERY = 10
+
 
 def _render_variant(
     storyboard: Storyboard,
@@ -66,7 +69,13 @@ def _render_variant(
     work: Path,
     audio_path: Path | None,
     report: Reporter,
-) -> RenderedVariant:
+    uploaded_before: int = 0,
+) -> tuple[RenderedVariant, int]:
+    """Render + upload + encode one variant.
+
+    Returns the manifest row and the pass-cumulative upload count, threaded into
+    the next variant so "N frames uploaded to B2 this pass" really is per-pass.
+    """
     job_id = storyboard.job_id
     total_frames = storyboard.duration_frames
     spec = variant_spec(variant, tier_from_master(storyboard.width, storyboard.height))
@@ -103,14 +112,32 @@ def _render_variant(
         )
 
         if settings.frame_upload_enabled:
-            report(phase="uploading", variant=variant, message="Uploading frames to B2")
             items = [
                 (frame_key(job_id, pass_number, variant, number), out_dir / frame_name(number))
                 for number in missing
                 if (out_dir / frame_name(number)).exists()
             ]
-            put_frames(items)
-            report(frames_uploaded=len(items))
+            # `rendered`/`total` are re-pointed at the upload leg for its duration
+            # (the phase label gives them meaning), so the bar and counter keep
+            # moving instead of freezing at "180 / 180" for most of the wall clock.
+            report(
+                phase="uploading",
+                variant=variant,
+                message="Uploading frames to B2",
+                rendered=0,
+                total=len(items),
+            )
+            base_uploaded = uploaded_before
+
+            def on_uploaded(done: int, count: int = len(items)) -> None:
+                # Throttled: 1,086 frames would otherwise take the progress lock
+                # 1,086 times per variant, for a bar the UI polls every 1.5s.
+                if done % UPLOAD_REPORT_EVERY == 0 or done == count:
+                    report(rendered=done, frames_uploaded=base_uploaded + done)
+
+            put_frames(items, on_uploaded=on_uploaded)
+            uploaded_before += len(items)
+            report(rendered=len(items), frames_uploaded=uploaded_before)
 
     if settings.frame_upload_enabled:
         # Authoritative per-pass frame accounting, straight from the bucket:
@@ -138,7 +165,13 @@ def _render_variant(
     report(phase="encoding", variant=variant, message=f"Encoding {variant}")
     mp4_local = work / f"{variant}.mp4"
     encode_variant(
-        out_dir, mp4_local, storyboard.fps, audio_path=audio_path, muted=spec["muted"]
+        out_dir,
+        mp4_local,
+        storyboard.fps,
+        audio_path=audio_path,
+        muted=spec["muted"],
+        # Bounds the MP4 to the frames it was built from — see `encode_variant`.
+        total_frames=total_frames,
     )
     poster_local = work / f"{variant}.poster.jpg"
     extract_poster(out_dir / frame_name(poster_frame_number(total_frames)), poster_local)
@@ -150,7 +183,7 @@ def _render_variant(
     # Frames live in B2 now; the local copies are disposable scratch.
     shutil.rmtree(out_dir, ignore_errors=True)
 
-    return RenderedVariant(
+    row = RenderedVariant(
         variant=variant,
         width=spec["width"],
         height=spec["height"],
@@ -161,6 +194,7 @@ def _render_variant(
         poster_key=poster_key(job_id, variant),
         duration_seconds=round(total_frames / max(1, storyboard.fps), 2),
     )
+    return row, uploaded_before
 
 
 def run_pass(job_id: str, report: Reporter) -> RenderPass:
@@ -186,35 +220,23 @@ def run_pass(job_id: str, report: Reporter) -> RenderPass:
         message=f"Pass {pass_number}, revision {storyboard.revision}",
     )
 
-    audio_path: Path | None = None
-    tier = tier_from_master(storyboard.width, storyboard.height)
-    if any(
-        not variant_spec(variant, tier)["muted"] for variant in storyboard.variants
-    ):
-        # The pass duration is an *input* to bed selection, not a hint: a bed
-        # shorter than the pass would be cut by `-shortest` and ship a truncated
-        # MP4. `ensure_audio_bed` re-synthesizes rather than reuse a short bed.
-        audio_path, _ = ensure_audio_bed(
-            storyboard.product,
-            storyboard.bpm,
-            total_frames / max(1, storyboard.fps),
-            work / "bed.wav",
-        )
+    audio_path = pass_audio_track(storyboard, work)
 
     rendered: list[RenderedVariant] = []
+    uploaded = 0
     for index, variant in enumerate(storyboard.variants, start=1):
         report(variant_index=index, variant=variant)
-        rendered.append(
-            _render_variant(
-                storyboard,
-                storyboard_path,
-                pass_number,
-                variant,
-                work,
-                audio_path,
-                report,
-            )
+        row, uploaded = _render_variant(
+            storyboard,
+            storyboard_path,
+            pass_number,
+            variant,
+            work,
+            audio_path,
+            report,
+            uploaded_before=uploaded,
         )
+        rendered.append(row)
 
     frame_bytes = sum(item.frame_bytes for item in rendered)
     variant_bytes = sum(item.variant_bytes for item in rendered)

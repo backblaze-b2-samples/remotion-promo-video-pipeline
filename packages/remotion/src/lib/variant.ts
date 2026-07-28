@@ -1,77 +1,42 @@
-// Variant id -> pixel geometry + safe-area insets.
+// Variant safe-area insets + accent themes, on top of the shared geometry.
 //
-// Read from packages/shared/src/variants.json, the SAME file the API reads
-// (services/api/app/types/variants.py), so a new delivery format is added in one
-// place and both sides agree on its dimensions.
+// The aspect-ratio -> pixels derivation lives in
+// `packages/shared/src/variant-geometry.ts`, read by BOTH this package and
+// `apps/web` (and mirrored in `services/api/app/types/variants.py`), so a new
+// delivery format is added in one place and every surface agrees on its
+// dimensions. Only the rendering-specific bit — the safe area the shot cards lay
+// text inside — is added here.
 
-import variantsDoc from "@remotion-promo-video-pipeline/shared/src/variants.json";
+import {
+  type VariantSizing,
+  variantGeometry as sharedVariantGeometry,
+} from "@remotion-promo-video-pipeline/shared/src/variant-geometry";
 import type { AccentTheme } from "./types";
 
-interface VariantDef {
-  id: string;
-  label: string;
-  aspect_w: number;
-  aspect_h: number;
-  fit: string;
-  muted: boolean;
-  purpose: string;
-}
+export {
+  MASTER_VARIANT,
+  tierFromMaster,
+  variantIds,
+} from "@remotion-promo-video-pipeline/shared/src/variant-geometry";
 
-export interface VariantGeometry {
-  id: string;
-  label: string;
-  width: number;
-  height: number;
-  fit: string;
-  muted: boolean;
+export interface VariantGeometry extends VariantSizing {
   /** Fraction of the frame to keep clear of copy on each edge. */
   safeArea: { x: number; y: number };
 }
 
-const VARIANTS = (variantsDoc as { variants: VariantDef[] }).variants;
-export const MASTER_VARIANT = "master-16x9";
-
-/** x264 needs even dimensions; odd ones fail the encode, not the render. */
-function even(value: number): number {
-  return Math.max(2, Math.round(value / 2) * 2);
-}
-
-export function variantIds(): string[] {
-  return VARIANTS.map((v) => v.id);
-}
-
 /**
- * Geometry for `id` at `tier` (the master's short edge: 720 or 1080).
- * 16:9 at 720 -> 1280x720; 9:16 -> 720x1280; 1:1 -> 720x720.
+ * Geometry for `id` at `tier` (the master's short edge: 720 or 1080), plus the
+ * safe area. 16:9 at 720 -> 1280x720; 9:16 -> 720x1280; 1:1 -> 720x720.
  */
 export function variantGeometry(id: string, tier: number): VariantGeometry {
-  const def = VARIANTS.find((v) => v.id === id) ?? VARIANTS[0];
-  const shortEdge = Math.max(2, Math.round(tier));
-  const landscape = def.aspect_w >= def.aspect_h;
-  const width = landscape
-    ? even((shortEdge * def.aspect_w) / def.aspect_h)
-    : even(shortEdge);
-  const height = landscape
-    ? even(shortEdge)
-    : even((shortEdge * def.aspect_h) / def.aspect_w);
-
+  const sizing = sharedVariantGeometry(id, tier);
   // A 16:9 capture reframed to 9:16 loses its edges, so vertical and square
-  // variants keep more horizontal margin clear of copy. This is the "safe area"
-  // the shot cards lay text inside.
-  const vertical = height > width;
+  // variants keep more horizontal margin clear of copy.
+  const vertical = sizing.height > sizing.width;
   return {
-    id: def.id,
-    label: def.label,
-    width,
-    height,
-    fit: def.fit,
-    muted: def.muted,
+    ...sizing,
     safeArea: vertical ? { x: 0.1, y: 0.16 } : { x: 0.08, y: 0.1 },
   };
-}
-
-export function tierFromMaster(width: number, height: number): number {
-  return Math.min(width, height);
 }
 
 const THEMES: Record<string, AccentTheme> = {

@@ -1,12 +1,14 @@
 "use client";
 
-import { Inbox, FileIcon } from "lucide-react";
+import { Inbox, FileIcon, FileQuestion } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { FetchingState } from "@/components/ui/fetching-state";
+import { InFlightState } from "@/components/ui/in-flight-state";
 import { DataTable } from "@/components/ui/data-table";
 import { ApiError } from "@/lib/api-client";
 import { Section } from "./section";
@@ -15,6 +17,7 @@ import { Section } from "./section";
 // thrown — `ErrorState` reads `status` to derive the right copy.
 const offlineError = new ApiError("Network error — check your connection", 0);
 const serverError = new ApiError("Internal Server Error", 500);
+const missingError = new ApiError("Promo 'deadbeef0000' not found", 404);
 
 type Row = { name: string; size: string; type: string };
 
@@ -107,6 +110,67 @@ export function DesignPatterns() {
             </CardHeader>
             <CardContent className="p-5">
               <ErrorState error={serverError} onRetry={() => {}} />
+            </CardContent>
+          </Card>
+
+          {/* A 404 is the case where Retry can never succeed, so it carries
+              links out instead of a button guaranteed to fail again. */}
+          <Card>
+            <CardHeader className="border-b border-border py-4 px-5">
+              <CardTitle className="card-title">
+                Error state — 404, no retry
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <ErrorState
+                error={missingError}
+                icon={FileQuestion}
+                title="No such promo"
+                action={
+                  <Button size="sm" variant="outline">
+                    All promos
+                  </Button>
+                }
+              />
+            </CardContent>
+          </Card>
+
+          {/* The cheap counterpart to the in-flight state: a read is coming, and
+              the placeholder says which B2 keys are being listed meanwhile. */}
+          <Card>
+            <CardHeader className="border-b border-border py-4 px-5">
+              <CardTitle className="card-title">
+                Fetching state — labelled skeletons
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <FetchingState
+                rows={3}
+                label={
+                  <>
+                    Listing <code className="font-mono">assets/&lt;product&gt;/</code>{" "}
+                    in B2...
+                  </>
+                }
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b border-border py-4 px-5">
+              <CardTitle className="card-title">
+                In-flight state — blocking request
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <InFlightState
+                title="Capturing the product UI"
+                budgetSeconds={20}
+                budgetNote="the capture waits up to 20s per viewport."
+              >
+                Launching Chromium &rarr; loading the page &rarr; screenshotting at
+                2x &rarr; uploading the PNGs to B2.
+              </InFlightState>
             </CardContent>
           </Card>
         </div>

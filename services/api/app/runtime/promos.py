@@ -71,18 +71,19 @@ def create_promo_endpoint(spec: StoryboardCreate):
 
     The capture runs inline (three viewports, a couple of seconds) so a new
     promo already has real product screenshots wired into its capture-using
-    shots. With no Chromium installed it degrades to placeholder cards instead
-    of failing — see `service/capture.py`.
+    shots. With no Chromium installed — or with an unreachable URL — it degrades
+    to placeholder cards instead of failing (see `service/capture.py`), and the
+    outcome is recorded on the storyboard so the degrade is never silent.
     """
     try:
-        capture_service.capture_product(
+        capture = capture_service.capture_product(
             spec.product,
             url=spec.capture_url,
             viewports=spec.viewports,
             accent=spec.accent,
         )
         capture_keys = assets_service.capture_keys_by_viewport(spec.product)
-        return promos.create_promo(spec, capture_keys=capture_keys)
+        return promos.create_promo(spec, capture_keys=capture_keys, capture=capture)
     except (promos.PromoValidationError, RuntimeError) as e:
         raise _handle(e) from None
 

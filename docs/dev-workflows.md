@@ -249,8 +249,12 @@ route. Build new screens from these primitives and tokens — don't hand-roll.
    groupings on reference pages.
 3. Fetch through a `queries.ts` hook (see Data Fetching below) — never bare
    `useEffect + fetch`.
-4. Cover every state: `Skeleton` while loading, `EmptyState` when there's no
-   data, `<ErrorState error={error} onRetry={...} />` on fetch failure.
+4. Cover every state: `<FetchingState label={...}>` while a read loads (labelled
+   skeletons — never a bare unlabelled `Skeleton` list), `EmptyState` when there's
+   no data, `<ErrorState error={error} onRetry={...} />` on fetch failure,
+   `<InFlightState>` for a blocking request over a couple of seconds. Never
+   render a count/total/"N of M" from data that has not arrived — skeleton it,
+   because "0 of 0" reads as a settled answer, not as loading.
 5. Style through tokens (`bg-*`, `text-*`, `var(--token)`) — no hex literals.
 
 ## Data Fetching
@@ -268,7 +272,9 @@ const { data: progress } = usePromoProgress(jobId); // polls only while renderin
 ```
 
 Surface errors via `<ErrorState error={error} onRetry={() => refetch()} />`
-rather than silently rendering empty UI.
+rather than silently rendering empty UI. Check the status first when the id
+comes from the URL: a `404` gets `action` links and **no** `onRetry`, because
+re-reading a key that does not exist fails identically every time.
 
 **Write** — wrap mutations with `useMutation` and invalidate on success:
 

@@ -65,6 +65,25 @@ export function buildFileTree(files: FileMetadata[]): TreeNode[] {
   return root.children;
 }
 
+/**
+ * Every folder path in the tree, at any depth.
+ *
+ * Used to fully expand a **prefix-scoped** listing: scoping to
+ * `frames/<job>/pass-01/` produces a chain of single-child folders, and leaving
+ * them collapsed means the objects the user scoped to see are still three clicks
+ * away. Safe to expand wholesale precisely because the listing is already bounded
+ * by the page size.
+ */
+export function allFolderPaths(nodes: TreeNode[]): string[] {
+  const paths: string[] = [];
+  for (const node of nodes) {
+    if (node.type === "folder") {
+      paths.push(node.path, ...allFolderPaths(node.children));
+    }
+  }
+  return paths;
+}
+
 function sortTree(nodes: TreeNode[]) {
   nodes.sort((a, b) => {
     if (a.type !== b.type) return a.type === "folder" ? -1 : 1;

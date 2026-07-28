@@ -33,6 +33,10 @@ import {
   useUpdatePromo,
 } from "@/lib/queries";
 import type { PromoDetail } from "@remotion-promo-video-pipeline/shared";
+import {
+  tierFromMaster,
+  variantGeometry,
+} from "@remotion-promo-video-pipeline/shared/src/variant-geometry";
 import { formatDuration } from "@/lib/amplification";
 import {
   MAX_SHOTS,
@@ -97,10 +101,28 @@ function StoryboardEditorForm({
   const cards = library?.cards ?? [];
   const sfxOptions = library?.sfx ?? [{ id: "none", label: "No SFX", synthesized: false }];
   const accents = library?.accents ?? [{ id: "ink-amber", label: "Ink Amber" }];
-  const variantOptions = defaults?.variant_options ?? [];
+  // Sizes come from THIS storyboard's master frame, not from the server's
+  // `RENDER_PRESET` default — a 1080p promo edited while the server defaults to
+  // 720p was told its variants were 720p, contradicting the badges on the promo
+  // page next door.
+  const variantOptions = (defaults?.variant_options ?? []).map((variant) => ({
+    ...variant,
+    ...variantGeometry(
+      variant.id,
+      tierFromMaster(promo.storyboard.width, promo.storyboard.height),
+    ),
+  }));
   const bpmOptions = defaults?.bpm_options ?? [90, 110, 120, 128];
   const total = totalFrames(shots);
   const fps = promo.storyboard.fps;
+  // What the pass will ACTUALLY render: the backend force-adds every required
+  // variant, so the PNG estimate below has to count them too.
+  const effectiveVariants = Array.from(
+    new Set([
+      ...variantOptions.filter((variant) => variant.required).map((v) => v.id),
+      ...variants,
+    ]),
+  );
 
   const onSave = () => {
     update.mutate(
@@ -108,7 +130,7 @@ function StoryboardEditorForm({
         title,
         bpm: Number(bpm),
         accent,
-        variants,
+        variants: effectiveVariants,
         shots,
       },
       {
@@ -174,10 +196,16 @@ function StoryboardEditorForm({
               {variantOptions.map((variant) => (
                 <label
                   key={variant.id}
-                  className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                  className={`flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm ${
+                    variant.required ? "bg-muted/40" : "cursor-pointer"
+                  }`}
                 >
+                  {/* Locked on, because `service/promos.update_promo` force-adds
+                      it: an unticked checkbox the backend overrides is a lie
+                      about what the pass will write. */}
                   <Checkbox
-                    checked={variants.includes(variant.id)}
+                    checked={variant.required || variants.includes(variant.id)}
+                    disabled={variant.required}
                     onCheckedChange={(checked) =>
                       setVariants((current) =>
                         checked
@@ -187,6 +215,11 @@ function StoryboardEditorForm({
                     }
                   />
                   {variant.label}
+                  {variant.required ? (
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      always
+                    </span>
+                  ) : null}
                   <span className="ml-auto font-mono text-[11px] text-muted-foreground">
                     {variant.width}x{variant.height}
                   </span>
@@ -221,8 +254,8 @@ function StoryboardEditorForm({
           <CardTitle className="card-title">Shots</CardTitle>
           <CardDescription className="text-xs">
             {shots.length} shots · {total} frames · {formatDuration(total, fps)} ·{" "}
-            {total * Math.max(1, variants.length)} PNGs on the next pass across{" "}
-            {Math.max(1, variants.length)} variants.
+            {total * Math.max(1, effectiveVariants.length)} PNGs on the next pass
+            across {Math.max(1, effectiveVariants.length)} variants.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 p-5">

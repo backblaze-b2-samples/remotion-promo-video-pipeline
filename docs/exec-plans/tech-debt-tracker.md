@@ -39,3 +39,18 @@ Entries below are this app's own — the starter kit's history is not carried ov
 | Server data was synced into React state via `useEffect` | Load-then-render split: forms mount only once defaults/storyboard have resolved, so initial values are real `useState`/`useForm` defaults (also what `react-hooks/set-state-in-effect` requires) |
 | A shot's first frame could render blank (typewriter at 0 characters) | The typewriter card starts at one character and keeps the sub line visible from frame 0 — a blank frame reads as a dropped frame and can be picked as the poster |
 | PDF metadata extraction and `PyPDF2` were dead weight | Dropped the dependency, the extraction branch and the `pdf_*` fields; nothing in this pipeline produces or consumes PDFs |
+
+## 2026-07-28 — verify
+
+Nitpicks surfaced by the `/sample-3-verify` UX funnel. Each was screenshot-gated by an
+adversarial reviewer; the two marked *(demoted)* were raised as friction and demoted to
+nitpick because the gate judged them over-claimed. None blocks the first-time-user goal.
+
+- Promo detail, delivery variants grid — the 16:9 master card is height-matched to the taller 9:16 card, leaving a large empty region inside it → wasted vertical space pushes the delivery manifest far below the fold (`.local/verify/A3/10-variant-grid-deadspace.png`)
+- Promo detail, after a completed pass *(demoted)* — nothing on the settled page mentions audio/bed/mux/BPM; the `Muxing frames + audio with ffmpeg` label is transient → no durable indicator that the beat-synced bed landed, though the finished MP4s' durations and byte sizes do evidence it (`.local/verify/D/13-detail-full-terminal.png`)
+- `/promos/new` vs `/library` — the same malformed `?product=../../etc` falls back to `demo-product` on the create form but to the alphabetically-first product on the Library picker → two different (both safe) fallbacks for one bad link (`.local/verify/D/23-newpromo-after-malformed.png`, `.local/verify/D/24-library-after-malformed.png`)
+- `/library` *(demoted)* — an uploaded brand PNG renders as a filename + object-key row with no preview, while the Captures kind gets a thumbnail grid → inconsistent recognition affordance across asset kinds (`.local/verify/D/18-library-acme-all-kinds.png`)
+- `/promos` — a poster `<img>` has no placeholder while its presigned B2 GET is in flight, so a row shows the browser's broken-image glyph and `Poster fra…` alt text for ~1s (proven transient: 0/12 posters painted at +3.1s, 12/12 by +4.34s) → a healthy row reads as a broken poster on first paint (`.local/verify/E/promos-posters-repainted.png`)
+- `docs/features/encode-and-variants.md` + the matching comment in `service/encode.py` — both say `-shortest` "is kept only as the fallback when the frame count is unknown", but the bounded branch emits `-shortest` **and** `-t D` → doc and code comment share the same imprecision; reword to match what the branch actually does
+- `packages/shared/src/variants.json` — the `note` field still says the file is "read by both packages/remotion (src/lib/variant.ts) and the API", but geometry now flows through `variant-geometry.ts` → transitively true, mildly stale
+- `apps/web/src/lib/amplification.ts:38` — `renderPercent` is dead in app code since `render-progress-panel.tsx` moved to `passPercent`; only its own test and `docs/features/dashboard.md:16` still reference it → remove with its test + doc mention

@@ -1,6 +1,16 @@
 import { PromoCreateForm } from "@/components/promos/promo-create-form";
 
-export default function NewPromoPage() {
+// `?product=<slug>` pre-fills the product field instead of the server default —
+// `/ingest` links here with the product whose assets were just uploaded, and
+// re-seeding `demo-product` silently pointed the promo at a different prefix than
+// the one holding the user's material.
+export default async function NewPromoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ product?: string | string[] }>;
+}) {
+  const { product } = await searchParams;
+
   return (
     <div className="space-y-8">
       <div className="animate-fade-in border-b border-border pb-5">
@@ -13,7 +23,7 @@ export default function NewPromoPage() {
         </p>
       </div>
       <div className="animate-fade-in-up stagger-2 max-w-3xl">
-        <PromoCreateForm />
+        <PromoCreateForm productParam={product} />
       </div>
     </div>
   );

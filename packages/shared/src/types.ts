@@ -64,6 +64,8 @@ export interface UploadStats {
 
 export type PromoStatus = "draft" | "rendering" | "rendered" | "failed";
 export type RenderPhase =
+  /** Nothing scheduled — a promo that has never been rendered. Not "queued". */
+  | "idle"
   | "queued"
   | "resuming"
   | "rendering"
@@ -139,6 +141,14 @@ export interface Storyboard {
   accent: string;
   variants: string[];
   shots: Shot[];
+  /**
+   * How the capture wired into this promo's shots was produced: `"playwright"`
+   * for a real product screenshot, `"placeholder"` for a Pillow-drawn card.
+   * `""` means unknown (a storyboard written before this was recorded).
+   */
+  capture_engine: string;
+  /** Why the capture degraded, when it did. Empty on a clean capture. */
+  capture_note: string;
   /** Server-computed sum of shot durations. */
   duration_frames: number;
 }
@@ -150,6 +160,8 @@ export interface VariantSpec {
   height: number;
   fit: string;
   muted: boolean;
+  /** The backend always adds this variant; the forms show it as locked-on. */
+  required: boolean;
   purpose: string;
 }
 

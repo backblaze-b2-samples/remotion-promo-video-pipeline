@@ -5,9 +5,13 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePromoProgress } from "@/lib/queries";
-import { formatFrameCount, renderPercent } from "@/lib/amplification";
+import { formatFrameCount, passPercent } from "@/lib/amplification";
 
 const PHASE_LABELS: Record<string, string> = {
+  // "Not started" rather than "Queued": nothing is waiting on the render worker
+  // for a promo that has never been rendered, and announcing "Queued" beside
+  // "No render yet" left first-timers waiting for a pass that never comes.
+  idle: "Not started",
   queued: "Queued",
   resuming: "Scanning B2 for frames already rendered",
   rendering: "Rendering frames in headless Chrome",
@@ -18,6 +22,14 @@ const PHASE_LABELS: Record<string, string> = {
   error: "Failed",
 };
 
+// The counter's meaning follows the phase: during the upload leg the backend
+// re-points `rendered`/`total` at objects uploaded, so the numbers keep moving
+// instead of freezing at "180 / 180".
+const COUNTER_NOUN: Record<string, string> = {
+  uploading: "uploaded",
+  rendering: "rendered",
+};
+
 export function RenderProgressPanel({ jobId }: { jobId: string }) {
   const { data: progress, isLoading } = usePromoProgress(jobId);
 
@@ -26,8 +38,11 @@ export function RenderProgressPanel({ jobId }: { jobId: string }) {
   }
   if (!progress) return null;
 
-  const percent = renderPercent(progress.rendered, progress.total);
+  // Weighted across resume -> render -> upload -> encode -> publish for every
+  // variant, so the bar tracks the whole pass rather than the render leg alone.
+  const percent = passPercent(progress);
   const active = progress.status === "rendering";
+  const noun = COUNTER_NOUN[progress.phase];
 
   return (
     <Card>
@@ -56,10 +71,19 @@ export function RenderProgressPanel({ jobId }: { jobId: string }) {
               ? `variant ${progress.variant_index}/${progress.variant_total} · `
               : ""}
             {formatFrameCount(progress.rendered)} / {progress.total}
+            {noun ? ` ${noun}` : ""}
           </span>
         </div>
 
         <Progress value={percent} aria-label="Render progress" />
+        <div className="flex justify-between text-[11px] tabular-nums text-muted-foreground">
+          <span>{active ? `${percent}% of pass ${progress.pass_number}` : ""}</span>
+          <span>
+            {active && progress.variant_total > 0
+              ? `${progress.variant_total} variants this pass`
+              : ""}
+          </span>
+        </div>
 
         <p className="text-xs text-muted-foreground" aria-live="polite">
           {progress.message || "No render yet."}

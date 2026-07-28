@@ -17,7 +17,8 @@ boto3 stays confined to this layer; the cached client is reused from
 """
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -61,18 +62,26 @@ def put_frames(
     items: list[tuple[str, Path]],
     concurrency: int | None = None,
     content_type: str = "image/png",
+    on_uploaded: Callable[[int], None] | None = None,
 ) -> int:
     """Upload every (key, local path) pair. Returns total bytes written.
 
     Invalidates the listing cache exactly once, after the whole batch.
+
+    `on_uploaded(count_done)` fires as each object lands (hence `as_completed`,
+    not submission order). It exists so the render progress panel can advance
+    during the upload leg, which on the `full` preset is minutes of wall clock —
+    the caller owns any throttling.
     """
     if not items:
         return 0
     total = 0
     with ThreadPoolExecutor(max_workers=_bounded(concurrency)) as pool:
         futures = [pool.submit(_put_one, key, path, content_type) for key, path in items]
-        for future in futures:
+        for done, future in enumerate(as_completed(futures), start=1):
             total += future.result()
+            if on_uploaded is not None:
+                on_uploaded(done)
     _invalidate_list_cache()
     logger.info("Frames uploaded: count=%d bytes=%d", len(items), total)
     return total

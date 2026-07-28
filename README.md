@@ -60,10 +60,15 @@ no committed binary asset** enter this repo. Full detail:
 - **Encode + per-platform variants** — ffmpeg muxes frames + audio into
   H.264/AAC. `master-16x9`, `vertical-9x16`, `square-1x1` and `loop-muted-16x9`
   are **real re-renders** at each variant's dimensions, not crops of the master.
+  The audio track is the synthesized bed **plus the storyboard's per-shot SFX
+  one-shots**, mixed in at each shot's beat-snapped offset, and every MP4 is
+  bounded to exactly `frames / fps` seconds.
 - **Delivery manifest** — revision, shot cards, frame counts, byte totals and the
   amplification ratio per pass.
 - **Scoped asset library + full bucket explorer** — `/library` for one product's
-  material, `/files` for whole-bucket forensics.
+  material, `/files` for whole-bucket forensics. `/files` lists the newest objects
+  first, says how many of the bucket's total that is, and takes a key prefix so
+  you can walk down to an individual `frames/<job-id>/pass-NN/<variant>/` tree.
 
 ## What it looks like
 
@@ -146,14 +151,23 @@ common setup gotchas and tells you how to fix each one.
 1. **Optional but recommended:** `pnpm run setup:capture` installs Playwright's
    Chromium (~150 MB) so captures are real screenshots. Without it, captures fall
    back to Pillow-drawn placeholder cards and the pipeline still runs end to end.
-2. Go to **Promos → New promo**. The safe defaults are shown as placeholders:
-   product `demo-product`, capture URL `http://localhost:3000` (this app's own
-   UI, so a first run needs nothing external), preset `release-teaser`, 120 BPM,
-   1280x720, variants `master-16x9` + `vertical-9x16`.
-3. Hit **Create promo** — the capture runs inline and
-   `storyboards/<job-id>.json` is written at revision 1.
-4. Hit **Render**. Frames stream to B2 as they render; progress is live. A `demo`
-   pass takes a couple of minutes on a laptop.
+2. Go to **Promos → New promo**. Every field opens **pre-filled with a working
+   default** — product `demo-product`, capture URL `http://localhost:3000` (this
+   app's own UI, so a first run needs nothing external), preset
+   `release-teaser`, 120 BPM, 1280x720, variants `master-16x9` +
+   `vertical-9x16`. `Master 16:9` is marked *always included*: the poster and the
+   frame strip both come from it, so the backend renders it either way.
+3. Hit **Create promo** — the capture runs inline (a stage breakdown and an
+   elapsed counter show while it does) and `storyboards/<job-id>.json` is written
+   at revision 1. If the capture cannot reach the URL, or Chromium is not
+   installed, the promo is still created from Pillow-drawn placeholder cards —
+   you get a **warning toast and a banner on the promo** saying so, and the note
+   names which of the two actually happened.
+4. Hit **Render** (the labelled button in the promo header, also offered by the
+   two empty panels below it). Frames stream to B2 as they render; the progress
+   bar is weighted across resume → render → upload → encode → publish for every
+   variant, so it tracks the whole pass. A `demo` pass takes a couple of minutes
+   on a laptop.
 5. Watch both variants on the detail page, then open **Edit storyboard**, change
    something, save (revision bumps) and render again — pass 2, and the
    amplification ratio climbs.

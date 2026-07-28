@@ -22,6 +22,20 @@ logger = logging.getLogger(__name__)
 
 CAPTURE_TIMEOUT_MS = 20_000
 DEVICE_SCALE_FACTOR = 2
+# Bounded settle budget AFTER `load`. The target page's own TanStack queries land
+# well after `load`, so a plain `load` + short sleep captured the app mid-skeleton
+# — grey blocks where the stat values, chart and table rows belong. Every step is
+# best-effort: a timeout means "carry on and shoot it", never "fail the capture".
+SKELETON_TIMEOUT_MS = 8_000
+# Deliberately shorter than the skeleton wait: it runs SECOND, as a mop-up for
+# late images on pages that have no skeletons to watch, and a page that polls
+# never reaches idle at all — so this budget is pure overhead there.
+NETWORK_IDLE_TIMEOUT_MS = 3_000
+SETTLE_MS = 600
+# shadcn/ui's `Skeleton` primitive stamps `data-slot="skeleton"` on every loading
+# placeholder, so "no skeleton is attached" is a real content-ready signal for
+# this app's own UI (the default capture URL) and a harmless no-op elsewhere.
+SKELETON_SELECTOR = '[data-slot="skeleton"]'
 
 _ACCENT_RGB = {
     "ink-amber": (24, 22, 20),
@@ -39,6 +53,30 @@ PLACEHOLDER_NOTE = (
     "placeholder cards. Run `pnpm run setup:capture` (~150 MB) and re-ingest to "
     "capture the real product UI."
 )
+
+
+class BrowserUnavailableError(RuntimeError):
+    """Playwright itself (or its Chromium download) is missing."""
+
+
+class CaptureFailedError(RuntimeError):
+    """The browser launched but the page could not be loaded or screenshotted."""
+
+
+def _unreachable_note(url: str, reason: str) -> str:
+    """Note for a capture that failed at the PAGE, not at the browser.
+
+    Blaming a missing Chromium for an unreachable URL sent people to run
+    `setup:capture` for a problem that install can never fix, so the two causes
+    are reported separately.
+    """
+    first_line = (reason or "").strip().splitlines()[0][:160] if reason else ""
+    return (
+        f"Chromium is installed but could not capture {url}"
+        f"{f' ({first_line})' if first_line else ''}, so these are Pillow-drawn "
+        "placeholder cards. Check that the URL is reachable from this machine "
+        "and re-ingest."
+    )
 
 
 def viewport_specs(ids: list[str] | None) -> list[dict]:
@@ -83,18 +121,55 @@ def _placeholder_png(url: str, viewport: dict, accent: str) -> bytes:
     return buffer.getvalue()
 
 
+def _wait_for_content(page) -> None:
+    """Best-effort wait for the page to stop being a loading skeleton.
+
+    Three bounded steps, each of which may time out harmlessly:
+
+    1. no attached `Skeleton` — the precise content-ready signal for a shadcn/ui
+       app, and an instant no-op on a page that has none. First on purpose: it is
+       both the fastest and the most meaningful of the three.
+    2. `networkidle` — mop-up for late images on pages with no skeletons to watch.
+       Bounded (and swallowed) because a page that polls forever never reaches idle.
+    3. a short fixed settle for fonts and entrance animations.
+    """
+    from playwright.sync_api import Error as PlaywrightError
+
+    for wait in (
+        lambda: page.wait_for_selector(
+            SKELETON_SELECTOR, state="detached", timeout=SKELETON_TIMEOUT_MS
+        ),
+        lambda: page.wait_for_load_state("networkidle", timeout=NETWORK_IDLE_TIMEOUT_MS),
+    ):
+        try:
+            wait()
+        except PlaywrightError as e:
+            logger.info("Capture settle step timed out, shooting anyway (%s)", e)
+    page.wait_for_timeout(SETTLE_MS)
+
+
 def _playwright_pngs(url: str, viewports: list[dict]) -> list[tuple[dict, bytes]]:
-    """Screenshot `url` at every viewport. Raises on any Playwright failure.
+    """Screenshot `url` at every viewport.
+
+    Raises `BrowserUnavailableError` when Playwright or its Chromium is missing
+    and `CaptureFailedError` when the browser is fine but the page is not, so the
+    caller can say which actually happened instead of always blaming the install.
 
     Uses the SYNC Playwright API on purpose: every B2/render handler in this app
     is a sync `def` running in Starlette's threadpool, so there is no event loop
     in this thread for the async API to attach to.
     """
-    from playwright.sync_api import sync_playwright
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as e:
+        raise BrowserUnavailableError(str(e)) from e
 
     shots: list[tuple[dict, bytes]] = []
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        try:
+            browser = playwright.chromium.launch()
+        except Exception as e:
+            raise BrowserUnavailableError(str(e)) from e
         try:
             for viewport in viewports:
                 context = browser.new_context(
@@ -102,12 +177,14 @@ def _playwright_pngs(url: str, viewports: list[dict]) -> list[tuple[dict, bytes]
                     device_scale_factor=DEVICE_SCALE_FACTOR,
                 )
                 page = context.new_page()
-                page.goto(url, wait_until="load", timeout=CAPTURE_TIMEOUT_MS)
-                # Settle late-arriving fonts/animations without waiting on
-                # networkidle, which a polling dashboard never reaches.
-                page.wait_for_timeout(1_200)
-                shots.append((viewport, page.screenshot(full_page=False)))
-                context.close()
+                try:
+                    page.goto(url, wait_until="load", timeout=CAPTURE_TIMEOUT_MS)
+                    _wait_for_content(page)
+                    shots.append((viewport, page.screenshot(full_page=False)))
+                except Exception as e:
+                    raise CaptureFailedError(str(e)) from e
+                finally:
+                    context.close()
         finally:
             browser.close()
     return shots
@@ -131,10 +208,14 @@ def capture_product(
 
     try:
         shots = _playwright_pngs(target, specs)
-    except Exception as e:  # any browser failure degrades to placeholders
-        logger.warning("Playwright capture unavailable (%s); using placeholders", e)
+    except Exception as e:  # any capture failure degrades to placeholders
+        logger.warning("Capture fell back to placeholders (%s)", e)
         engine = "placeholder"
-        note = PLACEHOLDER_NOTE
+        note = (
+            PLACEHOLDER_NOTE
+            if isinstance(e, BrowserUnavailableError)
+            else _unreachable_note(target, str(e))
+        )
         shots = [(spec, _placeholder_png(target, spec, accent)) for spec in specs]
 
     captures = []

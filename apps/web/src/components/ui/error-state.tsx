@@ -2,6 +2,7 @@
 
 import { AlertTriangle, RefreshCw, WifiOff } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ApiError, API_BASE } from "@/lib/api-client";
 
@@ -13,8 +14,12 @@ interface ErrorStateProps {
   title?: string;
   /** Override the auto-derived description. */
   description?: string;
-  /** Show a Retry button wired to this handler. */
+  /** Show a Retry button wired to this handler. Omit when a retry cannot
+   *  possibly succeed (a genuine 404) and pass `action` instead. */
   onRetry?: () => void;
+  /** Ways out that are not a retry — links, alternative destinations.
+   *  Mirrors `EmptyState`'s `action` slot. */
+  action?: ReactNode;
   icon?: LucideIcon;
   className?: string;
 }
@@ -88,6 +93,7 @@ export function ErrorState({
   title,
   description,
   onRetry,
+  action,
   icon,
   className,
 }: ErrorStateProps) {
@@ -108,12 +114,17 @@ export function ErrorState({
       <p className="text-sm text-muted-foreground mt-1 max-w-md">
         {finalDescription}
       </p>
-      {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry} className="mt-4">
-          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-          Retry
-        </Button>
-      )}
+      {onRetry || action ? (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          {onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Retry
+            </Button>
+          )}
+          {action}
+        </div>
+      ) : null}
     </div>
   );
 }
