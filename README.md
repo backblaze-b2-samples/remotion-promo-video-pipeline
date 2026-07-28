@@ -15,6 +15,43 @@ audio bed into an MP4, and re-renders per-platform cutdowns from the same
 storyboard. The bucket becomes a reusable brand-asset and render archive instead
 of a dumping ground for finished files.
 
+## What it looks like
+
+**Dashboard** — amplification-first metrics (intermediate bytes per delivered byte, frames archived, delivered video, render passes), a bytes-per-pass chart and the most recent renders.
+
+![Dashboard with write-amplification metrics, a bytes-per-pass chart and recent renders](docs/images/dashboard.png)
+
+**Promos** — every storyboard in `storyboards/`, newest first, with a poster read back out of B2, the storyboard summary, the measured amplification per promo and row actions.
+
+![Promo list with poster thumbnails, storyboard summaries and amplification per promo](docs/images/promos.png)
+
+**Promo detail** — per-variant `<video>` playback straight from `renders/`, the beat-snapped shot timeline, pass history with revision and ratio, a strip of real PNG frames pulled back out of `frames/`, and the delivery manifest.
+
+![Promo detail page with master and vertical playback, shot timeline, pass history and frame strip](docs/images/promo-detail.png)
+
+**Storyboard editor** — swap shot cards, rewrite copy, retime, reorder, pick per-shot SFX and choose delivery variants; saving bumps the revision so the next render is a new pass.
+
+![Storyboard editor with shot cards, copy fields, frame counts, SFX pickers and variant checkboxes](docs/images/storyboard-editor.png)
+
+**New promo** — every field opens pre-filled with a working default, and each delivery variant states what it is for and what it costs in extra frames.
+
+![New promo form pre-filled with product, capture URL, preset, BPM and delivery variants](docs/images/new-promo.png)
+
+**Shot cards** — the 10 implemented Remotion cards with their upstream ids, category, intensity and the pitfalls that matter when you use them.
+
+![Shot card catalog with ids, categories, default frame counts and pitfalls](docs/images/shot-cards.png)
+
+**Asset library** — one product's material under `assets/<product>/`: 2x captures, the synthesized audio bed, SFX one-shots and brand files, all served through presigned URLs.
+
+![Asset library scoped to one product showing captures, audio bed, SFX one-shots and brand files](docs/images/library.png)
+
+**Ingest** — the two ways material enters the bucket: a Playwright capture of a live page at `device_scale_factor=2`, or a direct upload filed by product and kind.
+
+![Ingest page with URL capture across three viewports and an asset upload dropzone](docs/images/ingest.png)
+
+Not pictured: `/files` (whole-bucket forensics, with a key-prefix filter),
+`/settings` and `/design`.
+
 ## Why this belongs on object storage
 
 **Write amplification** — and this app measures it rather than asserting it.
@@ -69,18 +106,6 @@ no committed binary asset** enter this repo. Full detail:
   material, `/files` for whole-bucket forensics. `/files` lists the newest objects
   first, says how many of the bucket's total that is, and takes a key prefix so
   you can walk down to an individual `frames/<job-id>/pass-NN/<variant>/` tree.
-
-## What it looks like
-
-- `/` — amplification-first dashboard: ratio, frames archived, delivered bytes,
-  bytes-per-pass chart
-- `/promos` — the promo list with poster thumbnails and row actions
-  (view / edit / render / delete)
-- `/promos/[id]` — per-variant `<video>` playback, storyboard timeline, pass
-  history, a strip of real frames read back out of B2, and the manifest
-- `/promos/[id]/edit` — storyboard editor (card selector, copy, duration, SFX,
-  reorder)
-- `/library`, `/shot-cards`, `/ingest`, `/files`, `/settings`, `/design`
 
 ## Quick Start
 
